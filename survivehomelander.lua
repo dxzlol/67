@@ -1,8 +1,5 @@
---[[
-    Survive Homelander ESP – Full-body + Temp V (original)
-    F1 = toggle Player ESP, F2 = refresh Temp V, F3 = toggle watermark
---]]
-
+--[[ Survive Homelander ESP v6.4 – TempV disappearance fix + watermark sync
+ F1 = toggle ESP | F2 = refresh TempV (new colour) | F3 = toggle watermark | F4 = manual Homelander | F5 = toggle Supe Brawl --]]
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local Camera = workspace.CurrentCamera
@@ -11,9 +8,152 @@ local Mouse = LP:GetMouse()
 
 -- ========== RANGE ==========
 local PLAYER_RANGE = 200
-local TEMP_RANGE = 200
 
--- ========== PLAYER ESP (full body) ==========
+-- ========== SUPE DETECTION ==========
+local SUPE_SPEED_THRESHOLD = 24
+local HOMELANDER_SPAWN_RADIUS = 10
+local SPAWN_COOLDOWN = 270
+
+-- Helper: get character model (works even if Player.Character is nil)
+local function getCharacter(plr)
+    local char = plr.Character
+    if char then return char end
+    return workspace:FindFirstChild(plr.Name)
+end
+
+local function isSupeBySpeed(character)
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if hum and hum.WalkSpeed then
+        return hum.WalkSpeed > SUPE_SPEED_THRESHOLD
+    end
+    return false
+end
+
+local function getSupeModel(playerName, modelName)
+    local folder = workspace:FindFirstChild(playerName)
+    if folder then
+        local model = folder:FindFirstChild(modelName)
+        if model then return model end
+    end
+    return nil
+end
+
+-- === Homelander spawn tracker ===
+local homelanderSpawnTagged = {}
+local nextSpawnScan = 0
+
+-- === Constant speed tracker ===
+local speedTagged = {}
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p == LP then continue end
+            local char = getCharacter(p)
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    if hum.WalkSpeed and hum.WalkSpeed > SUPE_SPEED_THRESHOLD then
+                        speedTagged[p.Name] = true
+                    else
+                        speedTagged[p.Name] = nil
+                    end
+                else
+                    speedTagged[p.Name] = nil
+                end
+            else
+                speedTagged[p.Name] = nil
+            end
+        end
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    homelanderSpawnTagged[plr.Name] = nil
+    speedTagged[plr.Name] = nil
+end)
+
+local function getHomelanderSpawnPosition()
+    local map = workspace:FindFirstChild("ActiveMap")
+    if map then
+        local point = map:FindFirstChild("HomelanderSpawn")
+        if point and point:IsA("BasePart") then
+            return point.Position
+        end
+    end
+    return Vector3.new(439.8, 283.66, -355.53)
+end
+
+local function scanForHomelanderSpawn(force)
+    if not force and tick() < nextSpawnScan then return end
+    local spawnPos = getHomelanderSpawnPosition()
+    local found = false
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LP then continue end
+        local char = getCharacter(p)
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local dist = (hrp.Position - spawnPos).Magnitude
+                if dist <= HOMELANDER_SPAWN_RADIUS then
+                    homelanderSpawnTagged[p.Name] = true
+                    print("[Spawn] Marked " .. p.Name .. " as Homelander")
+                    notify(p.Name .. " marked as Homelander", "ESP", 3)
+                    nextSpawnScan = tick() + SPAWN_COOLDOWN
+                    found = true
+                    break
+                end
+            end
+        end
+    end
+    if force and not found then
+        notify("No player near Homelander spawn found", "ESP", 2)
+    end
+end
+
+local function getPlayerColor(p, character)
+    if supeBrawlMode then
+        return Color3.fromRGB(255, 80, 80)
+    end
+    if homelanderSpawnTagged[p.Name] then return Color3.fromRGB(220, 40, 40) end
+    if getSupeModel(p.Name, "Homelander") then return Color3.fromRGB(220, 40, 40) end
+    if getSupeModel(p.Name, "Stormfront") then return Color3.fromRGB(160, 80, 255) end
+    if speedTagged[p.Name] then return Color3.fromRGB(255, 160, 30) end
+    return Color3.fromRGB(0, 180, 255)
+end
+
+-- ========== SUPE BRAWL MODE ==========
+local supeBrawlMode = false
+local supeBrawlTimeout = nil
+
+local function stopSupeBrawl()
+    supeBrawlMode = false
+    if supeBrawlTimeout then task.cancel(supeBrawlTimeout); supeBrawlTimeout = nil end
+    notify("Supe Brawl OFF", "Mode", 2)
+    if watermarkButton then watermarkButton.Color = Color3.fromRGB(0,255,0) end
+    if watermarkText then updateWatermarkText() end
+end
+
+local function startSupeBrawl()
+    supeBrawlMode = true
+    notify("Supe Brawl ON (3 min)", "Mode", 2)
+    if watermarkButton then watermarkButton.Color = Color3.fromRGB(255,0,0) end
+    if watermarkText then updateWatermarkText() end
+    if supeBrawlTimeout then task.cancel(supeBrawlTimeout) end
+    supeBrawlTimeout = task.delay(180, function()
+        supeBrawlMode = false
+        notify("Supe Brawl auto-off (3 min)", "Mode", 2)
+        if watermarkButton then watermarkButton.Color = Color3.fromRGB(0,255,0) end
+        if watermarkText then updateWatermarkText() end
+    end)
+end
+
+local function toggleSupeBrawl()
+    if supeBrawlMode then stopSupeBrawl() else startSupeBrawl() end
+end
+
+-- ========== PLAYER ESP ==========
 local playerEspEnabled = true
 local playerDrawings = {}
 
@@ -31,28 +171,10 @@ function togglePlayerESP()
     end
     if watermarkText then updateWatermarkText() end
 end
+
 _G.togglePlayers = togglePlayerESP
 
--- Speed detection
-local SUPE_SPEED_THRESHOLD = 24
-local function isSupeBySpeed(character)
-    local hum = character:FindFirstChildOfClass("Humanoid")
-    if hum and hum.WalkSpeed then
-        return hum.WalkSpeed > SUPE_SPEED_THRESHOLD
-    end
-    return false
-end
-
--- Homelander / Stormfront detection
-local function getSupeModel(playerName, modelName)
-    local folder = workspace:FindFirstChild(playerName)
-    if folder then
-        return folder:FindFirstChild(modelName)
-    end
-    return nil
-end
-
--- Full character bounds (original working version)
+-- Full character bounds
 local function charBounds(mdl)
     if not mdl then return nil end
     local hrp = mdl:FindFirstChild("HumanoidRootPart")
@@ -78,37 +200,39 @@ local function charBounds(mdl)
     }
 end
 
-local function getPlayerColor(p, character)
-    if getSupeModel(p.Name, "Homelander") then
-        return Color3.fromRGB(220, 40, 40)    -- red
-    end
-    if getSupeModel(p.Name, "Stormfront") then
-        return Color3.fromRGB(160, 80, 255)   -- purple
-    end
-    if isSupeBySpeed(character) then
-        return Color3.fromRGB(255, 160, 30)   -- orange
-    end
-    return Color3.fromRGB(0, 180, 255)        -- cool cyan
-end
-
 local function drawPlayer(p)
     if not playerEspEnabled then return end
-    if p == LP then return end   -- skip self
-    local char = p.Character
+    if p == LP then return end
+
+    local char = getCharacter(p)
     if not char then return end
+
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-    local dist = (Camera.Position - hrp.Position).Magnitude
-    if dist > PLAYER_RANGE then
+
+    if not supeBrawlMode then
+        local dist = (Camera.Position - hrp.Position).Magnitude
+        if dist > PLAYER_RANGE then
+            if playerDrawings[p.Name] then
+                playerDrawings[p.Name].box.Visible = false
+                playerDrawings[p.Name].text.Visible = false
+                playerDrawings[p.Name].line.Visible = false
+                playerDrawings[p.Name].active = false
+            end
+            return
+        end
+    end
+
+    local bounds = charBounds(char)
+    if not bounds then
         if playerDrawings[p.Name] then
             playerDrawings[p.Name].box.Visible = false
             playerDrawings[p.Name].text.Visible = false
             playerDrawings[p.Name].line.Visible = false
+            playerDrawings[p.Name].active = false
         end
         return
     end
-    local bounds = charBounds(char)
-    if not bounds then return end
 
     local key = p.Name
     if not playerDrawings[key] then
@@ -119,11 +243,18 @@ local function drawPlayer(p)
         text.Outline = true
         text.Center = true
         text.Size = 13
-        text.Color = Color3.fromRGB(255,255,255)
+        text.Color = Color3.fromRGB(255, 255, 255)
         local line = Drawing.new("Line")
         line.Thickness = 1
-        playerDrawings[key] = { box = box, text = text, line = line }
+        playerDrawings[key] = {
+            box = box,
+            text = text,
+            line = line,
+            active = true,
+            lastUpdate = tick()
+        }
     end
+
     local d = playerDrawings[key]
     local color = getPlayerColor(p, char)
     d.box.Color = color
@@ -131,107 +262,288 @@ local function drawPlayer(p)
     d.box.Position = bounds.pos
     d.box.Size = bounds.size
     d.box.Visible = true
-    d.text.Text = p.Name .. " [" .. math.floor(bounds.depth) .. "m]"
+    local modePrefix = supeBrawlMode and "[Brawl] " or ""
+    d.text.Text = modePrefix .. p.Name .. " [" .. math.floor(bounds.depth) .. "m]"
     d.text.Position = Vector2.new(bounds.pos.X + bounds.size.X / 2, bounds.pos.Y - 16)
     d.text.Visible = true
     local origin = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
     d.line.From = origin
     d.line.To = bounds.pos + Vector2.new(bounds.size.X * 0.5, bounds.size.Y)
     d.line.Visible = true
+
+    d.active = true
+    d.lastUpdate = tick()
 end
 
--- ========== TEMP V ESP (original recursive) ==========
-local tempVDrawings = {}
-local tempVParts = {}
+local function cleanupPlayerDrawings()
+    local now = tick()
+    for name, d in pairs(playerDrawings) do
+        if not d.active and (now - d.lastUpdate) > 5 then
+            d.box:Remove()
+            d.text:Remove()
+            d.line:Remove()
+            playerDrawings[name] = nil
+        end
+    end
+end
 
+-- Dedicated death check for tagged players
+local function checkTaggedDeaths()
+    for name, _ in pairs(homelanderSpawnTagged) do
+        local plr = Players:FindFirstChild(name)
+        if plr then
+            local char = getCharacter(plr)
+            if not char then
+                homelanderSpawnTagged[name] = nil
+                print("[Death] " .. name .. " died, Homelander tag removed")
+            end
+        else
+            homelanderSpawnTagged[name] = nil
+        end
+    end
+end
+
+-- ========== TEMP V ESP (Part Target, NO RANGE, PERSISTENT COLOUR, REAL-TIME SCAN) ==========
+local tempVDrawings = nil
+local tempVPart = nil
+local tempVColour = nil  -- Persistent colour
+
+-- Generate a random colour different from all player ESP colours
+local function getRandomTempVColour()
+    local reservedColors = {
+        {220, 40, 40},
+        {160, 80, 255},
+        {255, 160, 30},
+        {0, 180, 255},
+        {255, 80, 80}
+    }
+    local function distance(r1,g1,b1, r2,g2,b2)
+        return math.sqrt((r1-r2)^2 + (g1-g2)^2 + (b1-b2)^2)
+    end
+    local r, g, b
+    repeat
+        r = math.random(0,255)
+        g = math.random(0,255)
+        b = math.random(0,255)
+        local tooClose = false
+        for _, col in ipairs(reservedColors) do
+            if distance(r,g,b, col[1],col[2],col[3]) < 50 then
+                tooClose = true
+                break
+            end
+        end
+    until not tooClose
+    return Color3.fromRGB(r, g, b)
+end
+
+-- Scan entire workspace for TempPart (anywhere)
+local function findTempPartAnywhere()
+    local tf = workspace:FindFirstChild("TempV")
+    if tf then
+        local tp = tf:FindFirstChild("TempPart")
+        if tp and tp:IsA("BasePart") then
+            return tp
+        end
+    end
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "TempPart" and obj:IsA("BasePart") then
+            return obj
+        end
+    end
+    return nil
+end
+
+-- Properly clear Temp V state and update watermark
+local function clearTempV()
+    if tempVDrawings then
+        tempVDrawings.box:Remove()
+        tempVDrawings.text:Remove()
+        tempVDrawings = nil
+    end
+    tempVPart = nil
+    if watermarkText then updateWatermarkText() end
+end
+
+-- Recreate drawings with current colour (or new if forced)
 function forceRefreshTempV()
-    local root = workspace:FindFirstChild("TempV")
-    if not root then
-        tempVParts = {}
-        notify("Temp V not found", "Refresh", 2)
-        print("[TempV] Nothing to refresh")
-        if watermarkText then updateWatermarkText() end
-        return
+    -- Remove old drawings
+    clearTempV()
+
+    -- Only generate a new colour if no colour exists yet (manual refresh will override later)
+    if not tempVColour then
+        tempVColour = getRandomTempVColour()
     end
-    local function collect(inst, list)
-        if inst:IsA("BasePart") or inst:IsA("MeshPart") then
-            table.insert(list, inst)
-        end
-        for _, child in ipairs(inst:GetChildren()) do
-            collect(child, list)
-        end
+
+    local part = findTempPartAnywhere()
+    if part then
+        tempVPart = part
+        local box = Drawing.new("Square")
+        box.Filled = false
+        box.Color = tempVColour
+        box.Thickness = 2
+
+        local text = Drawing.new("Text")
+        text.Outline = true
+        text.Center = true
+        text.Size = 13
+        text.Color = Color3.fromRGB(255, 255, 255)
+
+        tempVDrawings = { box = box, text = text }
+        notify("Temp V Part Found & Tracked", "Refresh", 2)
+    else
+        notify("Temp V Part Not Found", "Refresh", 2)
     end
-    local newParts = {}
-    collect(root, newParts)
-    tempVParts = newParts
-    local msg = "Found " .. #tempVParts .. " parts"
-    notify(msg, "Temp V Refreshed", 2)
-    print("[TempV] Refreshed " .. msg)
+
     if watermarkText then updateWatermarkText() end
 end
 
 _G.refreshTempV = forceRefreshTempV
 
+-- Manual F2: force a new colour and scan
+local function manualRefreshTempV()
+    tempVColour = getRandomTempVColour()
+    forceRefreshTempV()
+end
+
+-- Periodic scan (every 20s) – does NOT change colour
 task.spawn(function()
     while true do
         task.wait(20)
         forceRefreshTempV()
+        scanForHomelanderSpawn(false)
     end
 end)
-forceRefreshTempV()
 
-local function drawTempV()
-    local active = {}
-    for _, part in ipairs(tempVParts) do
-        local key = tostring(part)
-        active[key] = true
-        if part and part.Position then
-            local dist = (Camera.Position - part.Position).Magnitude
-            if dist <= TEMP_RANGE then
-                local pos, onScreen = WorldToScreen(part.Position)
-                if onScreen and pos then
-                    if not tempVDrawings[key] then
-                        local box = Drawing.new("Square")
-                        box.Filled = false
-                        box.Color = Color3.fromRGB(0, 210, 255)
-                        box.Thickness = 2
-                        local text = Drawing.new("Text")
-                        text.Outline = true
-                        text.Center = true
-                        text.Size = 13
-                        text.Color = Color3.fromRGB(255,255,255)
-                        tempVDrawings[key] = { box = box, text = text }
-                    end
-                    local size = math.clamp(1000 / dist, 25, 80)
-                    local half = size / 2
-                    local d = tempVDrawings[key]
-                    d.box.Position = pos - Vector2.new(half, half)
-                    d.box.Size = Vector2.new(size, size)
-                    d.box.Visible = true
-                    d.text.Text = "Temp V [" .. math.floor(dist) .. "m]"
-                    d.text.Position = pos - Vector2.new(0, half + 10)
-                    d.text.Visible = true
-                else
-                    if tempVDrawings[key] then tempVDrawings[key].box.Visible = false; tempVDrawings[key].text.Visible = false end
+-- Real‑time scan: check every 1s for TempV part
+task.spawn(function()
+    while true do
+        task.wait(1)
+        -- If we have a part but it's no longer in the workspace, clear everything
+        if tempVPart and not tempVPart:IsDescendantOf(workspace) then
+            clearTempV()
+        end
+
+        -- If we don't have the part, try to find it
+        if not tempVPart then
+            local part = findTempPartAnywhere()
+            if part then
+                -- Use existing colour or generate a new one
+                if not tempVColour then
+                    tempVColour = getRandomTempVColour()
                 end
-            else
-                if tempVDrawings[key] then tempVDrawings[key].box.Visible = false; tempVDrawings[key].text.Visible = false end
+                tempVPart = part
+                if not tempVDrawings then
+                    local box = Drawing.new("Square")
+                    box.Filled = false
+                    box.Color = tempVColour
+                    box.Thickness = 2
+                    local text = Drawing.new("Text")
+                    text.Outline = true
+                    text.Center = true
+                    text.Size = 13
+                    text.Color = Color3.fromRGB(255, 255, 255)
+                    tempVDrawings = { box = box, text = text }
+                else
+                    tempVDrawings.box.Color = tempVColour
+                end
+                if watermarkText then updateWatermarkText() end
             end
         else
-            if tempVDrawings[key] then tempVDrawings[key].box.Visible = false; tempVDrawings[key].text.Visible = false end
+            -- Part is valid, ensure drawings exist and colour matches
+            if not tempVDrawings then
+                local box = Drawing.new("Square")
+                box.Filled = false
+                box.Color = tempVColour
+                box.Thickness = 2
+                local text = Drawing.new("Text")
+                text.Outline = true
+                text.Center = true
+                text.Size = 13
+                text.Color = Color3.fromRGB(255, 255, 255)
+                tempVDrawings = { box = box, text = text }
+            elseif tempVDrawings.box.Color ~= tempVColour then
+                tempVDrawings.box.Color = tempVColour
+            end
         end
     end
-    for key, d in pairs(tempVDrawings) do
-        if not active[key] then
-            d.box.Visible = false
-            d.text.Visible = false
+end)
+
+-- Initial scan
+forceRefreshTempV()
+
+local function computePartScreenBounds(part)
+    if not part or not part:IsA("BasePart") then return nil end
+    local cframe = part.CFrame
+    local size = part.Size
+    local halfSize = size / 2
+
+    local corners = {
+        cframe * Vector3.new(-halfSize.X,  halfSize.Y,  halfSize.Z),
+        cframe * Vector3.new( halfSize.X,  halfSize.Y,  halfSize.Z),
+        cframe * Vector3.new(-halfSize.X, -halfSize.Y,  halfSize.Z),
+        cframe * Vector3.new( halfSize.X, -halfSize.Y,  halfSize.Z),
+        cframe * Vector3.new(-halfSize.X,  halfSize.Y, -halfSize.Z),
+        cframe * Vector3.new( halfSize.X,  halfSize.Y, -halfSize.Z),
+        cframe * Vector3.new(-halfSize.X, -halfSize.Y, -halfSize.Z),
+        cframe * Vector3.new( halfSize.X, -halfSize.Y, -halfSize.Z)
+    }
+
+    local minX, maxX = math.huge, -math.huge
+    local minY, maxY = math.huge, -math.huge
+    local depth = math.huge
+
+    for _, corner in ipairs(corners) do
+        local screenPos, onScreen = WorldToScreen(corner)
+        if onScreen then
+            if screenPos.X < minX then minX = screenPos.X end
+            if screenPos.X > maxX then maxX = screenPos.X end
+            if screenPos.Y < minY then minY = screenPos.Y end
+            if screenPos.Y > maxY then maxY = screenPos.Y end
         end
+        local cornerDepth = (Camera.Position - corner).Magnitude
+        if cornerDepth < depth then depth = cornerDepth end
+    end
+
+    if minX == math.huge or maxX == -math.huge or minY == math.huge or maxY == -math.huge then
+        return nil
+    end
+
+    return {
+        pos = Vector2.new(minX, minY),
+        size = Vector2.new(maxX - minX, maxY - minY),
+        depth = depth
+    }
+end
+
+local function drawTempV()
+    if not tempVPart then return end
+    if not tempVPart:IsDescendantOf(workspace) then
+        -- If the part disappeared between the real‑time check and now, clear it
+        clearTempV()
+        return
+    end
+
+    local bounds = computePartScreenBounds(tempVPart)
+    if not bounds then
+        if tempVDrawings then
+            tempVDrawings.box.Visible = false
+            tempVDrawings.text.Visible = false
+        end
+        return
+    end
+
+    if tempVDrawings then
+        tempVDrawings.box.Position = bounds.pos
+        tempVDrawings.box.Size = bounds.size
+        tempVDrawings.box.Visible = true
+        tempVDrawings.text.Text = "Temp V [" .. math.floor(bounds.depth) .. "m]"
+        tempVDrawings.text.Position = Vector2.new(bounds.pos.X + bounds.size.X / 2, bounds.pos.Y - 16)
+        tempVDrawings.text.Visible = true
     end
 end
 
--- ========== WATERMARK (draggable) ==========
+-- ========== WATERMARK + SUPE BRAWL BUTTON ==========
 local watermarkVisible = true
-
 local watermarkBg = Drawing.new("Square")
 watermarkBg.Filled = true
 watermarkBg.Color = Color3.fromRGB(0, 0, 0)
@@ -248,7 +560,7 @@ watermarkText.ZIndex = 101
 watermarkText.Visible = true
 
 local creditText = Drawing.new("Text")
-creditText.Text = "Made by d.x.z. - v3.5"
+creditText.Text = "Made by d.x.z. - v6.4"
 creditText.Size = 11
 creditText.Color = Color3.fromRGB(200, 200, 200)
 creditText.Outline = true
@@ -256,16 +568,24 @@ creditText.Center = false
 creditText.ZIndex = 101
 creditText.Visible = true
 
-local BAR_WIDTH = 390
+local watermarkButton = Drawing.new("Square")
+watermarkButton.Filled = true
+watermarkButton.Color = Color3.fromRGB(0, 255, 0)
+watermarkButton.ZIndex = 102
+watermarkButton.Visible = true
+
+local BAR_WIDTH = 380
 local BAR_HEIGHT = 26
 local PADDING = 4
-
+local BUTTON_SIZE = 16
 local barX = 20
 local barY = 80
 
 local function updateWatermarkText()
     local status = playerEspEnabled and "ON" or "OFF"
-    watermarkText.Text = "Survive Homelander | ESP: " .. status .. " | Temp V: " .. #tempVParts
+    local tempStatus = tempVPart and "Tracked" or "None"
+    local brawlStatus = supeBrawlMode and " BRAWL" or ""
+    watermarkText.Text = "Survive Homelander | ESP: " .. status .. " | Temp V: " .. tempStatus .. brawlStatus
 end
 
 local function repositionWatermark(x, y)
@@ -273,10 +593,11 @@ local function repositionWatermark(x, y)
     barY = y
     watermarkBg.Position = Vector2.new(barX, barY)
     watermarkBg.Size = Vector2.new(BAR_WIDTH, BAR_HEIGHT)
-    watermarkText.Position = Vector2.new(barX + PADDING, barY + (BAR_HEIGHT - watermarkText.Size)/2)
+    watermarkText.Position = Vector2.new(barX + PADDING, barY + (BAR_HEIGHT - watermarkText.Size) / 2)
     creditText.Position = Vector2.new(barX + PADDING, barY + BAR_HEIGHT + 2)
+    watermarkButton.Position = Vector2.new(barX + BAR_WIDTH - BUTTON_SIZE - 2, barY + (BAR_HEIGHT - BUTTON_SIZE) / 2)
+    watermarkButton.Size = Vector2.new(BUTTON_SIZE, BUTTON_SIZE)
 end
-
 repositionWatermark(barX, barY)
 
 local function toggleWatermark()
@@ -284,75 +605,106 @@ local function toggleWatermark()
     watermarkBg.Visible = watermarkVisible
     watermarkText.Visible = watermarkVisible
     creditText.Visible = watermarkVisible
+    watermarkButton.Visible = watermarkVisible
     notify(watermarkVisible and "Watermark ON" or "Watermark OFF", "Watermark", 1)
 end
 _G.toggleWatermark = toggleWatermark
 
+local function isMouseOnWatermarkButton()
+    local mPos = Vector2.new(Mouse.X, Mouse.Y)
+    local btnPos = watermarkButton.Position
+    return mPos.X >= btnPos.X and mPos.X <= btnPos.X + BUTTON_SIZE and mPos.Y >= btnPos.Y and mPos.Y <= btnPos.Y + BUTTON_SIZE
+end
+
 updateWatermarkText()
 
--- ========== KEYBINDS ==========
+-- ========== KEY HANDLING (fixed keys) ==========
+local lastF1, lastF2, lastF3, lastF4, lastF5 = false, false, false, false, false
+local wmButtonPressStarted = false
+local wmButtonLastPressed = false
+
 task.spawn(function()
-    local lastF1, lastF2, lastF3 = false, false, false
     while true do
         task.wait(0.1)
-        local f1 = iskeypressed(112)
-        local f2 = iskeypressed(113)
-        local f3 = iskeypressed(114)
+        local f1 = iskeypressed(112) -- F1
+        local f2 = iskeypressed(113) -- F2
+        local f3 = iskeypressed(114) -- F3
+        local f4 = iskeypressed(115) -- F4
+        local f5 = iskeypressed(116) -- F5
+
         if f1 and not lastF1 then togglePlayerESP() end
-        if f2 and not lastF2 then forceRefreshTempV() end
+        if f2 and not lastF2 then
+            manualRefreshTempV()
+            scanForHomelanderSpawn(false)
+        end
         if f3 and not lastF3 then toggleWatermark() end
-        lastF1, lastF2, lastF3 = f1, f2, f3
+        if f4 and not lastF4 then scanForHomelanderSpawn(true) end
+        if f5 and not lastF5 then toggleSupeBrawl() end
+
+        lastF1, lastF2, lastF3, lastF4, lastF5 = f1, f2, f3, f4, f5
+
+        -- Watermark button click detection
+        local mousePressed = ismouse1pressed()
+        if mousePressed and not wmButtonLastPressed then
+            if watermarkVisible and isMouseOnWatermarkButton() then
+                wmButtonPressStarted = true
+            end
+        end
+        if not mousePressed and wmButtonLastPressed then
+            if wmButtonPressStarted and watermarkVisible and isMouseOnWatermarkButton() then
+                toggleSupeBrawl()
+            end
+            wmButtonPressStarted = false
+        end
+        wmButtonLastPressed = mousePressed
     end
 end)
 
--- ========== DRAGGING ==========
+-- ========== DRAGGING WATERMARK ==========
 local draggingWatermark = false
-local dragOffsetX, dragOffsetY = 0, 0
+local dragOffsetWmX, dragOffsetWmY = 0, 0
 local lastMouse = false
+
 task.spawn(function()
     while true do
         task.wait(0.05)
         local mousePressed = ismouse1pressed()
         local mPos = Vector2.new(Mouse.X, Mouse.Y)
-
         if mousePressed and not lastMouse then
             local bgPos = watermarkBg.Position
-            if mPos.X >= bgPos.X and mPos.X <= bgPos.X + BAR_WIDTH and
-               mPos.Y >= bgPos.Y and mPos.Y <= bgPos.Y + BAR_HEIGHT then
+            if not isMouseOnWatermarkButton() and mPos.X >= bgPos.X and mPos.X <= bgPos.X + BAR_WIDTH and mPos.Y >= bgPos.Y and mPos.Y <= bgPos.Y + BAR_HEIGHT then
                 draggingWatermark = true
-                dragOffsetX = mPos.X - barX
-                dragOffsetY = mPos.Y - barY
+                dragOffsetWmX = mPos.X - barX
+                dragOffsetWmY = mPos.Y - barY
             end
         end
-
         if draggingWatermark and mousePressed then
-            local newX = mPos.X - dragOffsetX
-            local newY = mPos.Y - dragOffsetY
-            repositionWatermark(newX, newY)
+            repositionWatermark(mPos.X - dragOffsetWmX, mPos.Y - dragOffsetWmY)
         end
-
         if not mousePressed and lastMouse then
             draggingWatermark = false
         end
-
         lastMouse = mousePressed
     end
 end)
 
 -- ========== MAIN RENDER ==========
 RunService.RenderStepped:Connect(function()
+    checkTaggedDeaths()
     for _, p in ipairs(Players:GetPlayers()) do
         drawPlayer(p)
     end
+    cleanupPlayerDrawings()
     drawTempV()
+    -- Watermark is now synced inside clearTempV() and the real‑time loop, so this fallback is just a safety
+    if watermarkText then updateWatermarkText() end
 end)
 
--- Startup message (no commas)
+-- Startup
 task.spawn(function()
     wait(1)
+    notify("ESP v6.4 – TempV disappearance fix", "ESP", 3)
     notify("This script is beta use at own risk", "Warning", 5)
     print("[WARNING] ESP is beta use at own risk")
+    print("Survive Homelander ESP v6.4 - TempV color & clean-up fixed.")
 end)
-
-print("Survive Homelander ESP v3.5 – Full body players + Temp V. F1 toggle F2 refresh F3 watermark")
-notify("Full-body ESP restored", "ESP v3.5", 4)
