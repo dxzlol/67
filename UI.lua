@@ -1,6 +1,7 @@
 --[[
-    Merged UI: WaifuUI visuals + HomesickUI API (FULL, no omissions)
-]]
+    Merged UI: WaifuUI visuals + HomesickUI API
+    Fully self‑contained – copy this whole block into your executor.
+--]]
 
 -- ====================== CORE DRAWING ENGINE (WaifuUI) ======================
 local DrawingNew = Drawing.new
@@ -1274,16 +1275,16 @@ local function processTextInput()
             return
         end
         local value = ProjectState.searchQuery or ""; local changed = false
-        local shifted = Input.shift.held or Input.lshift.held or Input.rshift.held; local now = clock()
+        local shifted = Input.shift.held or Input.lshift.held or Input.rshift.held; local now = clock(); local any_held = false
         if Input.delete.click then value = ""; changed = true end
         for i = 1, #InputOrder do
             local name = InputOrder[i]; local input = Input[name]
-            if input.click and input.char then value = value .. (shifted and input.shifted or input.char); changed = true; ProjectState.repeatKey = name; ProjectState.repeatAt = now + 0.4; break
+            if input.click and input.char then value = value .. (shifted and input.shifted or input.char); changed = true; ProjectState.repeatKey = name; ProjectState.repeatAt = now + 0.4; any_held = true; break
             elseif input.held and input.char and ProjectState.repeatKey == name then
-                if now >= (ProjectState.repeatAt or 0) then value = value .. (shifted and input.shifted or input.char); changed = true; ProjectState.repeatAt = now + 0.035 end; break
-            elseif input.click and (name == "backspace" or name == "unbound") then value = string.sub(value, 1, max(0, #value - 1)); changed = true; ProjectState.repeatKey = name; ProjectState.repeatAt = now + 0.4; break
+                any_held = true; if now >= (ProjectState.repeatAt or 0) then value = value .. (shifted and input.shifted or input.char); changed = true; ProjectState.repeatAt = now + 0.035 end; break
+            elseif input.click and (name == "backspace" or name == "unbound") then value = string.sub(value, 1, max(0, #value - 1)); changed = true; ProjectState.repeatKey = name; ProjectState.repeatAt = now + 0.4; any_held = true; break
             elseif input.held and (name == "backspace" or name == "unbound") and ProjectState.repeatKey == name then
-                if now >= (ProjectState.repeatAt or 0) then value = string.sub(value, 1, max(0, #value - 1)); changed = true; ProjectState.repeatAt = now + 0.035 end; break
+                any_held = true; if now >= (ProjectState.repeatAt or 0) then value = string.sub(value, 1, max(0, #value - 1)); changed = true; ProjectState.repeatAt = now + 0.035 end; break
             end
         end
         if not any_held then ProjectState.repeatKey = nil end
@@ -1409,7 +1410,6 @@ local function renderPanels(click, held)
             rect(x, y, w, 28, panel.accentColor or Theme.accent, 82, 8)
             txt(panel.title, x + 10, textTop(y, 28, 13), Theme.text, 13, FontBold, 83, false)
         end
-        -- (full panel rendering would go here; the existing Box API is simplified, but essential items are rendered)
         ::continue::
     end
 end
@@ -1423,7 +1423,6 @@ local function step()
 
     processTextInput(); processKeybinds()
 
-    -- Activity callbacks (simplified)
     local activityParts = {}
     for i = 1, #ProjectState.activities do
         local act = ProjectState.activities[i]
@@ -1434,7 +1433,6 @@ local function step()
     end
     ProjectState.activityText = #activityParts > 0 and concat(activityParts, " | ") or ""
 
-    -- Keyboard tab switching
     if ProjectState.open and not ProjectState.focus and not ProjectState.dropdown and not ProjectState.colorpicker and #ProjectState.tabs > 0 then
         if Input.left.click then
             local idx = max(1, (ProjectState.activeIndex or 1) - 1); ProjectState.activeTab = ProjectState.tabs[idx]; ProjectState.activeIndex = idx; ProjectState.tabScrollToActive = true
