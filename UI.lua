@@ -1,5 +1,5 @@
--- MatchaUI Library
--- A custom, lightweight Drawing-based UI library
+-- MatchaUI Library - Integrated
+-- Optimized for seamless execution within the Matcha environment
 
 local MatchaUI = {}
 MatchaUI.__index = MatchaUI
@@ -7,7 +7,7 @@ MatchaUI.__index = MatchaUI
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
+local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 
 -- Theme / Styling
 local Theme = {
@@ -20,14 +20,8 @@ local Theme = {
     ElementBg = Color3.fromRGB(35, 40, 35)
 }
 
--- Input State
-local Input = {
-    X = 0,
-    Y = 0,
-    Held = false,
-    Clicked = false,
-    Released = false
-}
+-- Input Handling
+local Input = { X = 0, Y = 0, Held = false, Clicked = false, Released = false }
 
 local function UpdateInput()
     local currentlyHeld = ismouse1pressed() == true
@@ -64,20 +58,11 @@ local function CreateText(z, size, color, center)
     return text
 end
 
--- Core Library Functions
 function MatchaUI.createWindow(title, width, height)
     local Window = {
         Title = title or "MatchaUI Window",
-        X = 100,
-        Y = 100,
-        W = width or 400,
-        H = height or 400,
-        Tabs = {},
-        ActiveTab = nil,
-        Dragging = false,
-        DragOffset = Vector2.new(0, 0),
-        
-        -- Drawings
+        X = 100, Y = 100, W = width or 400, H = height or 400,
+        Tabs = {}, ActiveTab = nil, Dragging = false, DragOffset = Vector2.new(0, 0),
         Drawings = {
             Bg = CreateRect(1, true, Theme.Background),
             Border = CreateRect(2, false, Theme.Border),
@@ -87,73 +72,25 @@ function MatchaUI.createWindow(title, width, height)
     }
     
     function Window:addTab(name)
-        local Tab = {
-            Name = name,
-            Sections = {},
-            Window = self,
-            Drawings = {
-                Text = CreateText(3, 13, Theme.SubText, true)
-            }
-        }
+        local Tab = { Name = name, Sections = {}, Window = self, Drawings = { Text = CreateText(3, 13, Theme.SubText, true) } }
         
         function Tab:addSection(name)
-            local Section = {
-                Name = name,
-                Elements = {},
-                Drawings = {
-                    Title = CreateText(3, 13, Theme.Text, false),
-                    Line = CreateRect(3, true, Theme.Border)
-                }
-            }
+            local Section = { Name = name, Elements = {}, Drawings = { Title = CreateText(3, 13, Theme.Text, false), Line = CreateRect(3, true, Theme.Border) } }
             
             function Section:addToggle(name, default, callback)
-                local Toggle = {
-                    Type = "Toggle",
-                    Name = name,
-                    Value = default or false,
-                    Callback = callback,
-                    Drawings = {
-                        Label = CreateText(3, 13, Theme.Text, false),
-                        Box = CreateRect(3, true, Theme.ElementBg),
-                        BoxBorder = CreateRect(4, false, Theme.Border),
-                        Indicator = CreateRect(4, true, Theme.Accent)
-                    }
-                }
+                local Toggle = { Type = "Toggle", Name = name, Value = default or false, Callback = callback, Drawings = { Label = CreateText(3, 13, Theme.Text, false), Box = CreateRect(3, true, Theme.ElementBg), BoxBorder = CreateRect(4, false, Theme.Border), Indicator = CreateRect(4, true, Theme.Accent) } }
                 table.insert(self.Elements, Toggle)
                 return Toggle
             end
 
             function Section:addButton(name, callback)
-                local Button = {
-                    Type = "Button",
-                    Name = name,
-                    Callback = callback,
-                    Drawings = {
-                        Box = CreateRect(3, true, Theme.ElementBg),
-                        BoxBorder = CreateRect(4, false, Theme.Border),
-                        Label = CreateText(4, 13, Theme.Text, true)
-                    }
-                }
+                local Button = { Type = "Button", Name = name, Callback = callback, Drawings = { Box = CreateRect(3, true, Theme.ElementBg), BoxBorder = CreateRect(4, false, Theme.Border), Label = CreateText(4, 13, Theme.Text, true) } }
                 table.insert(self.Elements, Button)
                 return Button
             end
             
             function Section:addSlider(name, min, max, default, callback)
-                local Slider = {
-                    Type = "Slider",
-                    Name = name,
-                    Min = min or 0,
-                    Max = max or 100,
-                    Value = default or min,
-                    Callback = callback,
-                    Dragging = false,
-                    Drawings = {
-                        Label = CreateText(3, 13, Theme.Text, false),
-                        Value = CreateText(3, 13, Theme.SubText, false),
-                        Bg = CreateRect(3, true, Theme.ElementBg),
-                        Fill = CreateRect(4, true, Theme.Accent)
-                    }
-                }
+                local Slider = { Type = "Slider", Name = name, Min = min or 0, Max = max or 100, Value = default or min, Callback = callback, Dragging = false, Drawings = { Label = CreateText(3, 13, Theme.Text, false), Value = CreateText(3, 13, Theme.SubText, false), Bg = CreateRect(3, true, Theme.ElementBg), Fill = CreateRect(4, true, Theme.Accent) } }
                 table.insert(self.Elements, Slider)
                 return Slider
             end
@@ -167,11 +104,9 @@ function MatchaUI.createWindow(title, width, height)
         return Tab
     end
     
-    -- Main Render Loop for this Window
     RunService.RenderStepped:Connect(function()
         UpdateInput()
         
-        -- Window Dragging Logic
         if IsHovering(Window.X, Window.Y, Window.W, 30) and Input.Clicked then
             Window.Dragging = true
             Window.DragOffset = Vector2.new(Input.X - Window.X, Input.Y - Window.Y)
@@ -182,7 +117,6 @@ function MatchaUI.createWindow(title, width, height)
             Window.Y = Input.Y - Window.DragOffset.Y
         end
         
-        -- Render Window Base
         Window.Drawings.Bg.Position = Vector2.new(Window.X, Window.Y)
         Window.Drawings.Bg.Size = Vector2.new(Window.W, Window.H)
         Window.Drawings.Border.Position = Vector2.new(Window.X, Window.Y)
@@ -192,7 +126,6 @@ function MatchaUI.createWindow(title, width, height)
         Window.Drawings.Title.Position = Vector2.new(Window.X + 10, Window.Y + 8)
         Window.Drawings.Title.Text = Window.Title
         
-        -- Render Tabs
         local tabWidth = Window.W / math.max(#Window.Tabs, 1)
         for i, tab in ipairs(Window.Tabs) do
             local tx = Window.X + (tabWidth * (i - 1))
@@ -206,7 +139,6 @@ function MatchaUI.createWindow(title, width, height)
                 Window.ActiveTab = tab
             end
             
-            -- Hide/Show sections based on active tab
             local isActive = (Window.ActiveTab == tab)
             local currentY = ty + 40
             
@@ -235,7 +167,6 @@ function MatchaUI.createWindow(title, width, height)
                             el.Drawings.Box.Size = Vector2.new(16, 16)
                             el.Drawings.BoxBorder.Position = Vector2.new(boxX, currentY)
                             el.Drawings.BoxBorder.Size = Vector2.new(16, 16)
-                            
                             el.Drawings.Indicator.Position = Vector2.new(boxX + 2, currentY + 2)
                             el.Drawings.Indicator.Size = Vector2.new(12, 12)
                             el.Drawings.Indicator.Visible = el.Value
@@ -255,7 +186,6 @@ function MatchaUI.createWindow(title, width, height)
                             
                             local isHoveringBtn = IsHovering(Window.X + 20, currentY, btnW, 24)
                             el.Drawings.BoxBorder.Color = isHoveringBtn and Theme.Accent or Theme.Border
-                            
                             el.Drawings.Label.Position = Vector2.new(Window.X + 20 + (btnW / 2), currentY + 5)
                             el.Drawings.Label.Text = el.Name
                             
@@ -296,7 +226,6 @@ function MatchaUI.createWindow(title, width, height)
             end
         end
     end)
-    
     return Window
 end
 
