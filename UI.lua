@@ -1,9 +1,9 @@
 --[[
     Merged UI: WaifuUI visuals + HomesickUI API
-    Fully self‑contained – copy this whole block into your executor.
+    Self‑contained, no omissions.
 --]]
 
--- ====================== CORE DRAWING ENGINE (WaifuUI) ======================
+-- ====================== CORE DRAWING ENGINE ======================
 local DrawingNew = Drawing.new
 local V2 = Vector2.new
 local C3 = Color3.fromRGB
@@ -225,7 +225,6 @@ addInput("quote", 0xDE, "'", "\"")
 
 local UI = {}
 
--- Drawing helper functions (same as original WaifuUI)
 local function viewportSize()
     local camera = Workspace.CurrentCamera
     if camera and camera.ViewportSize then return camera.ViewportSize.X, camera.ViewportSize.Y end
@@ -581,6 +580,32 @@ local function isItemDisabled(item)
     if not item then return false end
     local dep = item.dependsOn; if dep and dep.item then if not dep.item.value or isItemDisabled(dep.item) then return true end end
     return false
+end
+
+-- ====== MISSING FUNCTION ADDED HERE ======
+local function getFocusableItems()
+    local list = {}
+    if ProjectState.searchOpen then list[#list + 1] = "search" end
+    if ProjectState.searchOpen and ProjectState.searchQuery ~= "" then
+        local results = rebuildSearchResults()
+        for i = 1, #results do
+            local item = results[i]
+            if (item.type == "textbox" or item.type == "slider") and not isItemDisabled(item) then
+                list[#list + 1] = item
+            end
+        end
+    elseif ProjectState.activeTab then
+        for _, s in ipairs(ProjectState.activeTab.sections) do
+            if not s.collapsed then
+                for _, item in ipairs(s.items) do
+                    if (item.type == "textbox" or item.type == "slider") and not isItemDisabled(item) then
+                        list[#list + 1] = item
+                    end
+                end
+            end
+        end
+    end
+    return list
 end
 
 local function tooltip(text, x, y)
@@ -1214,7 +1239,7 @@ local function renderWindow(click, held, rightClick)
     return popupOpen and click or baseClick, popupOpen and held or baseHeld, popupOpen and rightClick or baseRightClick
 end
 
--- ====================== INPUT & MAIN LOOP (FULL) ======================
+-- ====================== INPUT & MAIN LOOP ======================
 local function updateInput()
     local active = true
     if type(isrbxactive) == "function" then active = isrbxactive() == true end
