@@ -940,7 +940,8 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             rect(tx, ty, 30, 16, toggleBg, 42, 8, trans)
                             local knobX = tx + 6 + 18 * item.animT
                             circle(knobX, ty + 8, 6, Theme.knob, 44, true, 0, 32, trans)
-                            if not popupBlocking and not disabled and hovered and (click or Input.m1.click) then
+                            -- ★ THIS LINE IS THE TOGGLE CLICK – MUST BE THE ORIGINAL
+                            if click and hovered and not popupBlocking and not disabled then
                                 setItemValue(item, not item.value, true)
                                 click = false
                             end
@@ -997,7 +998,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             rect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.surface2, 42, 6, trans)
                             strokeRect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.border, 43, 6, trans)
                             txt(item.label, rowX + rowW / 2, centerY(controlY, CONTROL_H), Theme.text, 14, FontSystem, 44, true, false, rowW - 16, trans)
-                            if not popupBlocking and not disabled and hovered and (click or Input.m1.click) then 
+                            if not popupBlocking and not disabled and hovered and (click or Input.m1.click) then
                                 safeCallback(item.callback)
                                 click = false
                             end
