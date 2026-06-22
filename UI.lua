@@ -1521,7 +1521,7 @@ function Homesick.createWindow(title, w, h)
             end
             sectionApi.addCheckbox = sectionApi.addToggle
             sectionApi.addSlider = function(self, id, label, default, step, minv, maxv, callback)
-                return sectionApi.Slider(self, label, default, step or 1, minv, maxv, "", callback)
+                return sectionApi.Slider(self, label, default, step, minv, maxv, "", callback)
             end
             sectionApi.addInput = sectionApi.Textbox
             sectionApi.addDropdown = function(self, id, label, choices, default, callback, multi)
