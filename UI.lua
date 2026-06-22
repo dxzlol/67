@@ -940,7 +940,10 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             rect(tx, ty, 30, 16, toggleBg, 42, 8, trans)
                             local knobX = tx + 6 + 18 * item.animT
                             circle(knobX, ty + 8, 6, Theme.knob, 44, true, 0, 32, trans)
-                            if click and hovered and not popupBlocking and not disabled then setItemValue(item, not item.value, true); click = false end
+                            if not popupBlocking and not disabled and hovered and (click or Input.m1.click) then
+                                safeCallback(item.callback)
+                                if click then click = false end
+                            end
                         elseif item.type == "slider" then
                             txt(item.label, rowX, textTop(rowY, ROW_H - 2, 14), Theme.text, 14, FontSystem, 42, false, false, rowW - 170, trans)
                             local focused = ProjectState.focus == item; local bx, bw = rowX + rowW - 150, 130
