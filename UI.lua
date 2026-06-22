@@ -1003,7 +1003,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
 
                             if not popupBlocking and not disabled and hovered and (click or ProjectState.rawClick) then
                                 safeCallback(item.callback)
-                                click = false
+                                if click then click = false end
                             end
                         elseif item.type == "textbox" then
                             txt(item.label, rowX, textTop(rowY, ROW_H - 2, 14), Theme.text, 14, FontSystem, 42, false, false, rowW - 170, trans)
