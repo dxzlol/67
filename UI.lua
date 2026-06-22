@@ -995,20 +995,19 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             if click and hovered and not popupBlocking and not disabled then spawnDropdown("item", dx, rowY + 28, dw, item.choices, item.value, item.multi, item.callback, item, nil); click = false end
                         elseif item.type == "button" then
                             local controlY = rowY + 2
-                            local hovered = over(rowX, controlY, rowW, CONTROL_H)   -- must come first
-
-                            -- Debug line (remove after testing)
-                            if hovered then print("Button hovered") end
+                            local hovered = over(rowX, controlY, rowW, CONTROL_H)
 
                             rect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.surface2, 42, 6, trans)
                             strokeRect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.border, 43, 6, trans)
                             txt(item.label, rowX + rowW / 2, centerY(controlY, CONTROL_H), Theme.text, 14, FontSystem, 44, true, false, rowW - 16, trans)
 
-                            -- Hard fallback: fire if mouse is pressed and we're hovering
-                            if not popupBlocking and not disabled and hovered and ismouse1pressed() then
-                                if not item._lastClick or clock() - item._lastClick > 0.3 then
-                                    item._lastClick = clock()
-                                    safeCallback(item.callback)
+                            if not popupBlocking and not disabled and hovered then
+                                if ismouse1pressed() then
+                                    print("ismouse1pressed TRUE")   -- <-- ADD THIS
+                                    if not item._lastClick or clock() - item._lastClick > 0.3 then
+                                        item._lastClick = clock()
+                                        safeCallback(item.callback)
+                                    end
                                 end
                                 if click then click = false end
                             end
