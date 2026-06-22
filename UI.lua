@@ -162,6 +162,7 @@ local PoolHighWater = { sq = 0, tx = 0, ln = 0, ci = 0, tr = 0, im = 0 }
 local TypeMap = { sq = "Square", tx = "Text", ln = "Line", ci = "Circle", tr = "Triangle", im = "Image" }
 
 local Input = {}
+_G.UI.Input = Input
 local InputOrder = {}
 
 local function addInput(name, id, char, shifted)
