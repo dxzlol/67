@@ -1478,6 +1478,7 @@ local function renderPanels(click, held)
 end
 
 local function step()
+    print("STEP open:", ProjectState.open, "activeTab:", ProjectState.activeTab and ProjectState.activeTab.name or "nil")
     resetPool(); ProjectState.tooltipText = nil
     local now = clock(); local dt = now - ProjectState.lastFrame; ProjectState.lastFrame = now; ProjectState.dt = dt
     getMouse(); updateInput()
@@ -1509,10 +1510,11 @@ local function step()
     local click = Input.m1.click; local held = Input.m1.held; local rightClick = Input.m2.click
 
     if not ProjectState.open or not ProjectState.focusedWindow or #ProjectState.tabs == 0 then
-        renderWatermark(click, held); renderDiagnostics(); renderPanels(click, held); hideUnused(); return
+        if not ProjectState.open then print("UI CLOSED – returning early") end
+        renderWatermark(click, held); renderDiagnostics(); click = renderPanels(click, held); hideUnused(); return
     end
     if not ProjectState.hasMouse then
-        renderWatermark(click, held); renderDiagnostics(); renderPanels(click, held); hideUnused(); return
+        renderWatermark(click, held); renderDiagnostics(); click = renderPanels(click, held); hideUnused(); return
     end
 
     clampWindow()
