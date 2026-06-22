@@ -1093,6 +1093,7 @@ local function renderTabs(click, px, py, pw)
 end
 
 local function renderWindow(click, held, rightClick)
+    if not ProjectState.activeTab then return click, held, rightClick end
     local x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
     local popupOpen = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
     local baseClick = popupOpen and false or click
@@ -1445,14 +1446,35 @@ end
 local function renderPanels(click, held)
     for _, panel in ipairs(ProjectState.panels) do
         if panel.visible then
-            local x, y = panel.position.X, panel.position.Y; local w, h = panel.size.X, panel.size.Y
-            rect(x, y, w, h, panel.bgColor or Theme.surface, 80, 8, 0.95); strokeRect(x, y, w, h, panel.accentColor or Theme.accent, 81, 8)
+            local x = panel.position.X
+            local y = panel.position.Y
+            local w = panel.size.X
+            local h = panel.size.Y
+            local hovered = over(x, y, w, 28)
+            if click and hovered and not ProjectState.panelDrag then
+                ProjectState.panelDrag = { panel = panel, offX = ProjectState.mouseX - x, offY = ProjectState.mouseY - y }
+                click = false
+            end
+            if held and ProjectState.panelDrag and ProjectState.panelDrag.panel == panel then
+                panel.position = V2(
+                    ProjectState.mouseX - ProjectState.panelDrag.offX,
+                    ProjectState.mouseY - ProjectState.panelDrag.offY
+                )
+                x, y = panel.position.X, panel.position.Y
+            elseif not held then
+                ProjectState.panelDrag = nil
+            end
+
+            rect(x, y, w, h, panel.bgColor or Theme.surface, 80, 8, 0.95)
+            strokeRect(x, y, w, h, panel.accentColor or Theme.accent, 81, 8)
             if panel.showTopbar then
                 rect(x, y, w, 28, panel.accentColor or Theme.accent, 82, 8)
                 txt(panel.title, x + 10, textTop(y, 28, 13), Theme.text, 13, FontBold, 83, false)
             end
         end
     end
+    if not held then ProjectState.panelDrag = nil end
+    return click
 end
 
 local function step()
@@ -1500,7 +1522,7 @@ local function step()
     renderTooltip()
     renderWatermark(click, held)
     renderDiagnostics()
-    renderPanels(click, held)
+    click = renderPanels(click, held)
     hideUnused()
 end
 
@@ -1617,6 +1639,7 @@ local function runStepSafe()
     local ok, err = pcall(step)
     ProjectState.rendering = false
     if not ok then
+        warn("UI STEP ERROR: " .. tostring(err))
         ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
         if ProjectState.errorCount >= 3 then ProjectState.alive = false; finalDestroy() end
     else ProjectState.errorCount = 0 end
