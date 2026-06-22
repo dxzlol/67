@@ -998,7 +998,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             rect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.surface2, 42, 6, trans)
                             strokeRect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.border, 43, 6, trans)
                             txt(item.label, rowX + rowW / 2, centerY(controlY, CONTROL_H), Theme.text, 14, FontSystem, 44, true, false, rowW - 16, trans)
-                            if not popupBlocking and not disabled and hovered and (click or Input.m1.click) then
+                            if not popupBlocking and not disabled and hovered and (click or ProjectState.rawClick) then
                                 safeCallback(item.callback)
                                 click = false
                             end
@@ -1537,6 +1537,7 @@ local function step()
     if Input.m1.released then ProjectState.sliderDrag = nil; ProjectState.scrollDrag = nil end
 
     local click = Input.m1.click; local held = Input.m1.held; local rightClick = Input.m2.click
+    ProjectState.rawClick = Input.m1.click   -- store the raw click before it gets consumed
 
     if not ProjectState.open or not ProjectState.focusedWindow or #ProjectState.tabs == 0 then
         if not ProjectState.open then print("UI CLOSED – returning early") end
