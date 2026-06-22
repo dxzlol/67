@@ -90,6 +90,13 @@ local Theme = {
     black = C3(0, 0, 0),
 }
 
+local function safeColor(c, fallback)
+    if not c or type(c) ~= "userdata" then
+        return fallback or Theme.text
+    end
+    return c
+end
+
 local ProjectState = {
     alive = true,
     destroyed = false,
@@ -845,7 +852,7 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
     if item.colorpicker then
         local picker = item.colorpicker; local cpX = rowX + rowW - 124; local cpW = 12; local cpH = 12; local cpY = rowY + 8
         local hovered = over(cpX - 3, cpY - 3, cpW + 6, cpH + 6)
-        rect(cpX, cpY, cpW, cpH, picker.value, 46, 3); strokeRect(cpX, cpY, cpW, cpH, Theme.border, 47, 3)
+        rect(cpX, cpY, cpW, cpH, safeColor(picker.value, Theme.accent), 46, 3); strokeRect(cpX, cpY, cpW, cpH, Theme.border, 47, 3)
         if hovered then strokeRect(cpX - 2, cpY - 2, cpW + 4, cpH + 4, Theme.accent, 48, 4) end
         if click and hovered then spawnColorpicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, picker); click = false
         elseif rightClick and hovered then
@@ -918,7 +925,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             if item.tooltip and not disabled then tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY) end
                         end
                         if item.type == "label" then
-                            txt(item.label, rowX, textTop(rowY, ROW_H - 2, 13), item.color or Theme.text, 13, FontSystem, 42, false, false, rowW, trans)
+                            txt(item.label, rowX, textTop(rowY, ROW_H - 2, 13), safeColor(item.color, Theme.text), 13, FontSystem, 42, false, false, rowW, trans)
                         elseif item.type == "toggle" then
                             local labelColor = item.value and Theme.text or Theme.sub
                             if item.unsafe then labelColor = Theme.unsafe elseif item.colorpicker and item.colorpicker.overwrite then labelColor = item.colorpicker.value end
@@ -1481,10 +1488,10 @@ local function renderPanels(click, held)
                 ProjectState.panelDrag = nil
             end
 
-            rect(x, y, w, h, panel.bgColor or Theme.surface, 80, 8, 0.95)
-            strokeRect(x, y, w, h, panel.accentColor or Theme.accent, 81, 8)
+            rect(x, y, w, h, safeColor(panel.bgColor, Theme.surface), 80, 8, 0.95)
+            strokeRect(x, y, w, h, safeColor(panel.accentColor, Theme.accent), 81, 8)
             if panel.showTopbar then
-                rect(x, y, w, 28, panel.accentColor or Theme.accent, 82, 8)
+                rect(x, y, w, 28, safeColor(panel.accentColor, Theme.accent), 82, 8)
                 txt(panel.title, x + 10, textTop(y, 28, 13), Theme.text, 13, FontBold, 83, false)
             end
         end
@@ -1588,7 +1595,9 @@ function Homesick.createWindow(title, w, h)
             end
             sectionApi.addButton = sectionApi.Button
             sectionApi.addSeparator = sectionApi.Divider
-            sectionApi.addText = sectionApi.Label
+            sectionApi.addText = function(self, id, text, color, size, font, alignment)
+                return sectionApi.Label(self, text, color or Theme.text)
+            end
             sectionApi.addColorpicker = function(self, id, label, default, callback)
                 local item = sectionApi.Toggle(self, label, false, function() end)
                 return item:AddColorpicker(label, default, false, callback)
