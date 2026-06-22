@@ -365,10 +365,26 @@ end
 
 local function txt(value, x, y, color, size, font, z, centered, outline, maxWidth, transparency)
     if value == nil or value == "" then return end
-    if maxWidth then value = trimText(value, maxWidth, size, font); if value == "" then return end else value = tostring(value) end
-    local d = getDrawing("tx"); if not d then return end
-    d.Text = value; d.Position = V2(x, y); d.Color = color; d.Size = size or 13; d.Font = font or FontSystem
-    d.ZIndex = (z or 1) + 10; d.Center = centered == true; d.Outline = outline == true; d.Transparency = transparency or DRAW_VISIBLE
+    if not color or type(color) ~= "userdata" then
+        color = Theme.text
+    end
+    if maxWidth then
+        value = trimText(value, maxWidth, size, font)
+        if value == "" then return end
+    else
+        value = tostring(value)
+    end
+    local d = getDrawing("tx")
+    if not d then return end
+    d.Text = value
+    d.Position = V2(x, y)
+    d.Color = color
+    d.Size = size or 13
+    d.Font = font or FontSystem
+    d.ZIndex = (z or 1) + 10
+    d.Center = centered == true
+    d.Outline = outline == true
+    d.Transparency = transparency or DRAW_VISIBLE
 end
 
 local function centerY(y, h) return y + h / 2 end
@@ -1636,15 +1652,21 @@ end
 function UI:Destroy() ProjectState.alive = false; if not ProjectState.rendering then finalDestroy() end; return self end
 
 local function runStepSafe()
-    if not ProjectState.alive then if stepConnection then stepConnection:Disconnect(); stepConnection = nil end; finalDestroy(); return end
+    if not ProjectState.alive then
+        if stepConnection then stepConnection:Disconnect(); stepConnection = nil end
+        finalDestroy()
+        return
+    end
     ProjectState.rendering = true
     local ok, err = pcall(step)
     ProjectState.rendering = false
     if not ok then
         warn("UI STEP ERROR: " .. tostring(err))
-        ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
-        if ProjectState.errorCount >= 3 then ProjectState.alive = false; finalDestroy() end
-    else ProjectState.errorCount = 0 end
+        --ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
+        --if ProjectState.errorCount >= 3 then ProjectState.alive = false; finalDestroy() end
+    --else 
+        --ProjectState.errorCount = 0 
+    end
 end
 
 local RunService = game:GetService("RunService")
