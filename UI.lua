@@ -991,13 +991,16 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             local display = item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-")
                             txt(display, dx + 6, textTop(controlY, CONTROL_H, 13), Theme.text, 13, FontUI, 44, false, false, dw - 24, trans)
                             drawChevronDown(dx + dw - 15, centerY(controlY, CONTROL_H) - 2, Theme.sub, 45)
-                            if not popupBlocking and not disabled and hovered and (click or Input.m1.click) then spawnDropdown("item", dx, rowY + 28, dw, item.choices, item.value, item.multi, item.callback, item, nil); click = false end
+                            if click and hovered and not popupBlocking and not disabled then spawnDropdown("item", dx, rowY + 28, dw, item.choices, item.value, item.multi, item.callback, item, nil); click = false end
                         elseif item.type == "button" then
                             local controlY = rowY + 2; local hovered = over(rowX, controlY, rowW, CONTROL_H)
                             rect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.surface2, 42, 6, trans)
                             strokeRect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.border, 43, 6, trans)
                             txt(item.label, rowX + rowW / 2, centerY(controlY, CONTROL_H), Theme.text, 14, FontSystem, 44, true, false, rowW - 16, trans)
-                            if not popupBlocking and not disabled and hovered and (click or Input.m1.click) then safeCallback(item.callback); click = false end
+                            if not popupBlocking and not disabled and hovered and (click or Input.m1.click) then 
+                                safeCallback(item.callback)
+                                click = false
+                            end
                         elseif item.type == "textbox" then
                             txt(item.label, rowX, textTop(rowY, ROW_H - 2, 14), Theme.text, 14, FontSystem, 42, false, false, rowW - 170, trans)
                             local bx, bw = rowX + rowW - 150, 130; local focused = ProjectState.focus == item
@@ -1007,7 +1010,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             local shown = item.value ~= "" and item.value or item.label
                             if focused and floor(clock() * 2) % 2 == 0 then shown = tostring(item.value or "") .. "|" end
                             txt(shown, bx + 6, textTop(controlY, CONTROL_H, 13), (item.value ~= "" or focused) and Theme.text or Theme.sub, 13, FontUI, 44, false, false, bw - 12, trans)
-                            if not popupBlocking and not disabled and hovered and (click or Input.m1.click) then ProjectState.focus = focused and nil or item; click = false end
+                            if click and hovered and not popupBlocking and not disabled then ProjectState.focus = focused and nil or item; click = false end
                         elseif item.type == "divider" then
                             if item.label and item.label ~= "" then
                                 local textVal = item.label; local textW = textWidth(textVal, 11, FontSystem)
