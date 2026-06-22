@@ -1,6 +1,6 @@
 --[[
     Merged UI: WaifuUI visuals + HomesickUI API
-    Fully self‑contained – no syntax errors, all fixes applied.
+    Release version – no debug prints, all fixes applied.
 --]]
 
 -- ====================== CORE DRAWING ENGINE ======================
@@ -1454,7 +1454,8 @@ local function renderWatermark(click, held)
     if not ProjectState.watermarkEnabled then return end
     local title = ProjectState.watermarkTitle ~= "" and ProjectState.watermarkTitle or ProjectState.title or "Merged UI"
     local text = ProjectState.activityText ~= "" and (title .. " | " .. ProjectState.activityText) or title
-    local w = textWidth(text, 12, FontUI) + 20; local h = 24
+    local w = math.max(200, textWidth(text, 12, FontUI) + 20)   -- minimum width of 200px
+    local h = 24
     local x = ProjectState.watermarkX or 20; local y = ProjectState.watermarkY or 20
     local hovered = over(x, y, w, h)
     if click and hovered then ProjectState.watermarkDrag = {ProjectState.mouseX - x, ProjectState.mouseY - y} end
@@ -1549,7 +1550,6 @@ local function step()
     ProjectState.rawClick = Input.m1.click   -- store the raw click before it gets consumed
 
     if not ProjectState.open or not ProjectState.focusedWindow or #ProjectState.tabs == 0 then
-        if not ProjectState.open then print("UI CLOSED – returning early") end
         renderWatermark(click, held); renderDiagnostics(); click = renderPanels(click, held); hideUnused(); return
     end
     if not ProjectState.hasMouse then
@@ -1675,7 +1675,6 @@ local function finalDestroy()
 end
 
 function UI:Destroy()
-    print("UI:Destroy called!")
     ProjectState.alive = false
     if not ProjectState.rendering then 
         finalDestroy()
@@ -1694,10 +1693,10 @@ local function runStepSafe()
     ProjectState.rendering = false
     if not ok then
         warn("UI STEP ERROR: " .. tostring(err))
-        --ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
-        --if ProjectState.errorCount >= 3 then ProjectState.alive = false; finalDestroy() end
-    --else 
-        --ProjectState.errorCount = 0 
+        ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
+        if ProjectState.errorCount >= 3 then ProjectState.alive = false; finalDestroy() end
+    else
+        ProjectState.errorCount = 0
     end
 end
 
