@@ -736,7 +736,7 @@ end
 local function renderColorpicker(click, held)
     local cp = ProjectState.colorpicker; if not cp then return click end
     local x, y, w, h = cp.x, cp.y, cp.w, cp.h
-    rect(x, y, w, h, C3(35, 35, 40), 110, 8); strokeRect(x, y, w, h, Theme.border, 111, 8)
+    rect(x, y, w, h, Theme.surface2, 110, 8); strokeRect(x, y, w, h, Theme.border, 111, 8)
     txt(cp.picker.label, x + 10, y + 8, Theme.text, 13, FontBold, 112, false, false, w - 20)
     local palX, palY = x + 10, y + 28; local palW, palH = w - 20, 82; local cell = 18
     for gx = palX, palX + palW - 1, cell do
@@ -1520,8 +1520,8 @@ function Homesick.createWindow(title, w, h)
                 return h
             end
             sectionApi.addCheckbox = sectionApi.addToggle
-            sectionApi.addSlider = function(self, id, label, default, minv, maxv, callback)
-                return sectionApi.Slider(self, label, default, 1, minv, maxv, "", callback)
+            sectionApi.addSlider = function(self, id, label, default, step, minv, maxv, callback)
+                return sectionApi.Slider(self, label, default, step or 1, minv, maxv, "", callback)
             end
             sectionApi.addInput = sectionApi.Textbox
             sectionApi.addDropdown = function(self, id, label, choices, default, callback, multi)
