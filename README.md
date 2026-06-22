@@ -1,6 +1,5 @@
 scripts for matcha
 
+i am skid skid sahur
 
-ui lib work in skidding ~90% functional from skidding.
-  slider broken :sob:
-  uhhh themes broken kinda 💀
+the ui lib is WaifuUIxHomesickUI so skid so so so skid probably functional or sm
