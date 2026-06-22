@@ -1501,7 +1501,6 @@ local function renderPanels(click, held)
 end
 
 local function step()
-    print("STEP open:", ProjectState.open, "activeTab:", ProjectState.activeTab and ProjectState.activeTab.name or "nil")
     resetPool(); ProjectState.tooltipText = nil
     local now = clock(); local dt = now - ProjectState.lastFrame; ProjectState.lastFrame = now; ProjectState.dt = dt
     getMouse(); updateInput()
