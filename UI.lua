@@ -1454,7 +1454,7 @@ local function renderWatermark(click, held)
     if not ProjectState.watermarkEnabled then return end
     local title = ProjectState.watermarkTitle ~= "" and ProjectState.watermarkTitle or ProjectState.title or "Merged UI"
     local text = ProjectState.activityText ~= "" and (title .. " | " .. ProjectState.activityText) or title
-    local w = math.max(200, textWidth(text, 12, FontUI) + 20)   -- minimum width of 200px
+    local w = math.max(500, textWidth(text, 12, FontUI) + 20)   -- minimum width of 500px
     local h = 24
     local x = ProjectState.watermarkX or 20; local y = ProjectState.watermarkY or 20
     local hovered = over(x, y, w, h)
