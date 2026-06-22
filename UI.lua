@@ -1,6 +1,6 @@
 --[[
     Merged UI: WaifuUI visuals + HomesickUI API
-    Fully self‑contained, no syntax errors, no goto.
+    Fully self‑contained – no syntax errors, all fixes applied.
 --]]
 
 -- ====================== CORE DRAWING ENGINE ======================
@@ -225,7 +225,6 @@ addInput("quote", 0xDE, "'", "\"")
 
 local UI = {}
 
--- Drawing helper functions (unchanged)
 local function viewportSize()
     local camera = Workspace.CurrentCamera
     if camera and camera.ViewportSize then return camera.ViewportSize.X, camera.ViewportSize.Y end
@@ -583,7 +582,6 @@ local function isItemDisabled(item)
     return false
 end
 
--- ====== CORRECTLY PLACED getFocusableItems ======
 local function getFocusableItems()
     local list = {}
     if ProjectState.searchOpen then list[#list + 1] = "search" end
@@ -650,16 +648,16 @@ local function renderDropdown(click)
     end
     dd.scrollOffset = clamp(dd.scrollOffset, 0, max(0, #dd.choices - maxRows))
     rect(dd.x - 1, dd.y - 1, dd.w + 2, dd.h + 2, Theme.border, 110, 6)
-    rect(dd.x, dd.y, dd.w, dd.h, C3(35, 35, 40), 111, 6)
+    rect(dd.x, dd.y, dd.w, dd.h, Theme.surface2, 111, 6)  -- fixed background
     if isMulti then
         local btnW = (dd.w - 12) / 2; local btnY = dd.y + 4; local btnH = 18
         local selectAllX = dd.x + 4; local clearAllX = dd.x + 8 + btnW
         local hoverSelectAll = over(selectAllX, btnY, btnW, btnH)
         local hoverClearAll = over(clearAllX, btnY, btnW, btnH)
-        rect(selectAllX, btnY, btnW, btnH, hoverSelectAll and C3(55, 55, 62) or C3(42, 42, 48), 112, 4)
+        rect(selectAllX, btnY, btnW, btnH, hoverSelectAll and Theme.surface3 or Theme.surface2, 112, 4)
         strokeRect(selectAllX, btnY, btnW, btnH, hoverSelectAll and Theme.accent or Theme.border, 113, 4)
         txt("Select All", selectAllX + btnW / 2, centerY(btnY, btnH), Theme.text, 11, FontUI, 113, true)
-        rect(clearAllX, btnY, btnW, btnH, hoverClearAll and C3(55, 55, 62) or C3(42, 42, 48), 112, 4)
+        rect(clearAllX, btnY, btnW, btnH, hoverClearAll and Theme.surface3 or Theme.surface2, 112, 4)
         strokeRect(clearAllX, btnY, btnW, btnH, hoverClearAll and Theme.accent or Theme.border, 113, 4)
         txt("Clear All", clearAllX + btnW / 2, centerY(btnY, btnH), Theme.text, 11, FontUI, 113, true)
         line(dd.x + 4, dd.y + 25, dd.x + dd.w - 4, dd.y + 25, Theme.border, 113)
@@ -685,7 +683,7 @@ local function renderDropdown(click)
         if dd.kind == "keymode" then selected = dd.keybind and dd.keybind.mode == choice
         else for vi = 1, #dd.value do if dd.value[vi] == choice then selected = true; break end end end
         local hovered = over(dd.x, rowY, dd.w, 22)
-        if hovered then rect(dd.x + 2, rowY, dd.w - 4, 22, C3(50, 50, 56), 112, 3) end
+        if hovered then rect(dd.x + 2, rowY, dd.w - 4, 22, Theme.surface3, 112, 3) end
         txt(tostring(choice), dd.x + 8, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontUI, 113, false, false, dd.w - 24)
         if click and hovered then
             if dd.kind == "keymode" then dd.keybind.mode = choice; safeCallback(dd.keybind.callback, dd.keybind.value and Input[dd.keybind.value] and Input[dd.keybind.value].id or nil, dd.keybind.mode); ProjectState.dropdown = nil
@@ -736,7 +734,8 @@ end
 local function renderColorpicker(click, held)
     local cp = ProjectState.colorpicker; if not cp then return click end
     local x, y, w, h = cp.x, cp.y, cp.w, cp.h
-    rect(x, y, w, h, Theme.surface2, 110, 8); strokeRect(x, y, w, h, Theme.border, 111, 8)
+    rect(x, y, w, h, Theme.surface2, 110, 8)  -- fixed background
+    strokeRect(x, y, w, h, Theme.border, 111, 8)
     txt(cp.picker.label, x + 10, y + 8, Theme.text, 13, FontBold, 112, false, false, w - 20)
     local palX, palY = x + 10, y + 28; local palW, palH = w - 20, 82; local cell = 18
     for gx = palX, palX + palW - 1, cell do
@@ -767,7 +766,7 @@ local function renderColorpicker(click, held)
     end
     local hexY = y + 158; local hexW = w - 20; local hexH = 22
     local hexFocused = ProjectState.focus == cp; local hexHovered = over(x + 10, hexY, hexW, hexH)
-    rect(x + 10, hexY, hexW, hexH, hexFocused and C3(25, 25, 30) or hexHovered and C3(45, 45, 52) or C3(35, 35, 40), 114, 4)
+    rect(x + 10, hexY, hexW, hexH, hexFocused and Theme.surface2 or hexHovered and Theme.surface3 or Theme.surface2, 114, 4)
     strokeRect(x + 10, hexY, hexW, hexH, hexFocused and Theme.accent or Theme.border, 115, 4)
     local hexText = hexFocused and (cp._hexInput or "") or ("#" .. toHex(cp.value))
     if hexFocused and floor(clock() * 2) % 2 == 0 then hexText = hexText .. "|" end
@@ -883,7 +882,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                         local disabled = isItemDisabled(item); local trans = disabled and 0.4 or nil
                         local hoveredRow = over(rowX, rowY, rowW, ROW_H - 2)
                         if hoveredRow and item.type ~= "divider" then
-                            rect(rowX - 3, rowY, rowW + 6, ROW_H - 2, C3(42, 42, 49), 36, 5, trans)
+                            rect(rowX - 3, rowY, rowW + 6, ROW_H - 2, Theme.surface3, 36, 5, trans)
                             if item.tooltip and not disabled then tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY) end
                         end
                         if item.type == "label" then
@@ -908,7 +907,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             local focused = ProjectState.focus == item; local bx, bw = rowX + rowW - 150, 130
                             if focused then
                                 local controlY = rowY + 3
-                                rect(bx, controlY, bw, CONTROL_H, C3(35, 35, 42), 42, 4, trans); strokeRect(bx, controlY, bw, CONTROL_H, Theme.accent, 43, 4, trans)
+                                rect(bx, controlY, bw, CONTROL_H, Theme.surface2, 42, 4, trans); strokeRect(bx, controlY, bw, CONTROL_H, Theme.accent, 43, 4, trans)
                                 local shown = tostring(item._directValue or "")
                                 if floor(clock() * 2) % 2 == 0 then shown = shown .. "|" end
                                 txt(shown, bx + 6, textTop(controlY, CONTROL_H, 13), Theme.text, 13, FontUI, 44, false, false, bw - 12, trans)
@@ -923,7 +922,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                                 if item.knobAnim ~= targetKnob then item.knobAnim = smoothValue(item.knobAnim, targetKnob, 18); if abs(item.knobAnim - targetKnob) < 0.001 then item.knobAnim = targetKnob end end
                                 local knobRadius = 5 + 2 * item.knobAnim
                                 local knobColor = lerpColor(Theme.text, Theme.accent, item.knobAnim)
-                                rect(sx, rowY + 12, sw, 4, C3(58, 58, 64), 42, 2, trans)
+                                rect(sx, rowY + 12, sw, 4, Theme.surface3, 42, 2, trans)
                                 if frac > 0 then rect(sx, rowY + 12, sw * frac, 4, Theme.accent, 43, 2, trans) end
                                 circle(sx + sw * frac, rowY + 14, knobRadius, knobColor, 44, true, 0, 32, trans)
                                 txt(tostring(item.value) .. tostring(item.suffix or ""), sx + sw + 8, textTop(rowY, ROW_H - 2, 13), Theme.text, 13, FontSystem, 44, false, false, 42, trans)
@@ -945,7 +944,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             txt(item.label, rowX, textTop(rowY, ROW_H - 2, 14), Theme.text, 14, FontSystem, 42, false, false, rowW - 170, trans)
                             local dx, dw = rowX + rowW - 150, 130; local controlY = rowY + 3
                             local hovered = over(dx, controlY, dw, CONTROL_H)
-                            rect(dx, controlY, dw, CONTROL_H, hovered and C3(55, 55, 62) or C3(42, 42, 48), 42, 4, trans)
+                            rect(dx, controlY, dw, CONTROL_H, hovered and Theme.surface3 or Theme.surface2, 42, 4, trans)
                             strokeRect(dx, controlY, dw, CONTROL_H, Theme.border, 43, 4, trans)
                             local display = item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-")
                             txt(display, dx + 6, textTop(controlY, CONTROL_H, 13), Theme.text, 13, FontUI, 44, false, false, dw - 24, trans)
@@ -953,7 +952,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             if click and hovered and not popupBlocking and not disabled then spawnDropdown("item", dx, rowY + 28, dw, item.choices, item.value, item.multi, item.callback, item, nil); click = false end
                         elseif item.type == "button" then
                             local controlY = rowY + 2; local hovered = over(rowX, controlY, rowW, CONTROL_H)
-                            rect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or C3(42, 42, 48), 42, 6, trans)
+                            rect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.surface2, 42, 6, trans)
                             strokeRect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.border, 43, 6, trans)
                             txt(item.label, rowX + rowW / 2, centerY(controlY, CONTROL_H), Theme.text, 14, FontSystem, 44, true, false, rowW - 16, trans)
                             if click and hovered and not popupBlocking and not disabled then safeCallback(item.callback); click = false end
@@ -961,7 +960,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             txt(item.label, rowX, textTop(rowY, ROW_H - 2, 14), Theme.text, 14, FontSystem, 42, false, false, rowW - 170, trans)
                             local bx, bw = rowX + rowW - 150, 130; local focused = ProjectState.focus == item
                             local controlY = rowY + 3; local hovered = over(bx, controlY, bw, CONTROL_H)
-                            rect(bx, controlY, bw, CONTROL_H, focused and C3(35, 35, 42) or hovered and C3(55, 55, 62) or C3(42, 42, 48), 42, 4, trans)
+                            rect(bx, controlY, bw, CONTROL_H, focused and Theme.surface2 or hovered and Theme.surface3 or Theme.surface2, 42, 4, trans)
                             strokeRect(bx, controlY, bw, CONTROL_H, focused and Theme.accent or Theme.border, 43, 4, trans)
                             local shown = item.value ~= "" and item.value or item.label
                             if focused and floor(clock() * 2) % 2 == 0 then shown = tostring(item.value or "") .. "|" end
@@ -992,7 +991,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
         local barY = contY + CONTENT_PAD + (tab.scrollY / max(1, tab.maxScroll)) * (trackH - barH)
         local trackHovered = over(px + pw - 11, contY + CONTENT_PAD, 12, trackH)
         local overBar = over(px + pw - 11, barY, 12, barH)
-        rect(px + pw - 6, contY + CONTENT_PAD, 3, trackH, C3(45, 45, 52), 50, 2)
+        rect(px + pw - 6, contY + CONTENT_PAD, 3, trackH, Theme.surface3, 50, 2)
         rect(px + pw - 6, barY, 3, barH, Theme.sub, 51, 2)
         if click and trackHovered and not popupBlocking then
             local grab = barH / 2; if overBar then grab = clamp(ProjectState.mouseY - barY, 0, barH) end
@@ -1187,7 +1186,7 @@ local function renderWindow(click, held, rightClick)
     if ProjectState.searchOpen then
         local tbX, tbW = x + 70, w - 114; local tbY = y + 8
         local focused = ProjectState.focus == "search"; local hovered = over(tbX, tbY, tbW, CONTROL_H)
-        rect(tbX, tbY, tbW, CONTROL_H, focused and C3(35, 35, 42) or hovered and C3(55, 55, 62) or C3(42, 42, 48), 15, 4)
+        rect(tbX, tbY, tbW, CONTROL_H, focused and Theme.surface2 or hovered and Theme.surface3 or Theme.surface2, 15, 4)
         strokeRect(tbX, tbY, tbW, CONTROL_H, focused and Theme.accent or Theme.border, 16, 4)
         local shown = ProjectState.searchQuery or ""
         if focused and floor(clock() * 2) % 2 == 0 then shown = shown .. "|" end
@@ -1511,8 +1510,8 @@ function Homesick.createWindow(title, w, h)
             tab.sections[#tab.sections + 1] = sec
             local sectionApi = createSection(tab, name)
             sectionApi.addToggle = function(self, id, label, default, callback)
-                    local h = sectionApi.Toggle(self, label, default, callback)
-                    if h then
+                local h = sectionApi.Toggle(self, label, default, callback)
+                if h then
                     h.addKeybind = h.AddKeybind
                     h.addColorpicker = h.AddColorpicker
                     h.addTooltip = h.AddTooltip
@@ -1521,7 +1520,8 @@ function Homesick.createWindow(title, w, h)
             end
             sectionApi.addCheckbox = sectionApi.addToggle
             sectionApi.addSlider = function(self, id, label, default, step, minv, maxv, callback)
-                return sectionApi.Slider(self, label, default, 1, minv, maxv, "", callback)
+                step = step or 1
+                return sectionApi.Slider(self, label, default, step, minv, maxv, "", callback)
             end
             sectionApi.addInput = sectionApi.Textbox
             sectionApi.addDropdown = function(self, id, label, choices, default, callback, multi)
