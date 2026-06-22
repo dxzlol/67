@@ -224,6 +224,7 @@ addInput("rbracket", 0xDD, "]", "}")
 addInput("quote", 0xDE, "'", "\"")
 
 local UI = {}
+_G.UI = UI
 
 local function viewportSize()
     local camera = Workspace.CurrentCamera
@@ -540,6 +541,21 @@ function UI:SetControlsStyle(style, options)
         for k, v in pairs(options) do ProjectState.customControls[k] = v end
     end
     return self
+end
+-- ====================== ADD RegisterActivity TO UI ======================
+function UI:RegisterActivity(callback)
+    ProjectState.activityId = ProjectState.activityId + 1
+    local activity = {
+        id = ProjectState.activityId,
+        callback = callback,
+        alive = true,
+    }
+    ProjectState.activities[#ProjectState.activities + 1] = activity
+    return {
+        Remove = function()
+            activity.alive = false
+        end,
+    }
 end
 
 -- ====================== RENDERING FUNCTIONS ======================
