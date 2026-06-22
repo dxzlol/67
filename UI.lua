@@ -1,6 +1,6 @@
 --[[
     Merged UI: WaifuUI visuals + HomesickUI API
-    Self‑contained, no omissions.
+    Fully self‑contained, no syntax errors, no goto.
 --]]
 
 -- ====================== CORE DRAWING ENGINE ======================
@@ -225,6 +225,7 @@ addInput("quote", 0xDE, "'", "\"")
 
 local UI = {}
 
+-- Drawing helper functions (unchanged)
 local function viewportSize()
     local camera = Workspace.CurrentCamera
     if camera and camera.ViewportSize then return camera.ViewportSize.X, camera.ViewportSize.Y end
@@ -582,7 +583,7 @@ local function isItemDisabled(item)
     return false
 end
 
--- ====== MISSING FUNCTION ADDED HERE ======
+-- ====== CORRECTLY PLACED getFocusableItems ======
 local function getFocusableItems()
     local list = {}
     if ProjectState.searchOpen then list[#list + 1] = "search" end
@@ -1428,14 +1429,14 @@ end
 
 local function renderPanels(click, held)
     for _, panel in ipairs(ProjectState.panels) do
-        if not panel.visible then goto continue end
-        local x, y = panel.position.X, panel.position.Y; local w, h = panel.size.X, panel.size.Y
-        rect(x, y, w, h, panel.bgColor or Theme.surface, 80, 8, 0.95); strokeRect(x, y, w, h, panel.accentColor or Theme.accent, 81, 8)
-        if panel.showTopbar then
-            rect(x, y, w, 28, panel.accentColor or Theme.accent, 82, 8)
-            txt(panel.title, x + 10, textTop(y, 28, 13), Theme.text, 13, FontBold, 83, false)
+        if panel.visible then
+            local x, y = panel.position.X, panel.position.Y; local w, h = panel.size.X, panel.size.Y
+            rect(x, y, w, h, panel.bgColor or Theme.surface, 80, 8, 0.95); strokeRect(x, y, w, h, panel.accentColor or Theme.accent, 81, 8)
+            if panel.showTopbar then
+                rect(x, y, w, 28, panel.accentColor or Theme.accent, 82, 8)
+                txt(panel.title, x + 10, textTop(y, 28, 13), Theme.text, 13, FontBold, 83, false)
+            end
         end
-        ::continue::
     end
 end
 
@@ -1510,8 +1511,12 @@ function Homesick.createWindow(title, w, h)
             tab.sections[#tab.sections + 1] = sec
             local sectionApi = createSection(tab, name)
             sectionApi.addToggle = function(self, id, label, default, callback)
-                local h = sectionApi.Toggle(self, label, default, callback)
-                if h and h.AddTooltip then h.AddTooltip = h.AddTooltip end
+                    local h = sectionApi.Toggle(self, label, default, callback)
+                    if h then
+                    h.addKeybind = h.AddKeybind
+                    h.addColorpicker = h.AddColorpicker
+                    h.addTooltip = h.AddTooltip
+                end
                 return h
             end
             sectionApi.addCheckbox = sectionApi.addToggle
