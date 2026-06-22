@@ -1569,9 +1569,9 @@ function Homesick.createWindow(title, w, h)
         if not ProjectState.activeTab then ProjectState.activeTab = tab; ProjectState.activeIndex = #ProjectState.tabs end
         local tabMethods = {}
         function tabMethods:addSection(name, side)
-            local sec = { name = name, items = {}, collapsed = false, side = side or "Left" }
-            tab.sections[#tab.sections + 1] = sec
             local sectionApi = createSection(tab, name)
+            local sec = tab.sections[#tab.sections]
+            sec.side = side or "Left" 
             sectionApi.addToggle = function(self, id, label, default, callback)
                 local h = sectionApi.Toggle(self, label, default, callback)
                 if h then
