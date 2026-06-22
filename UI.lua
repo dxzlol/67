@@ -1658,7 +1658,14 @@ local function finalDestroy()
     for kind, list in pairs(Pool) do for i = 1, #list do if list[i] then pcall(function() list[i]:Remove() end) end end end
 end
 
-function UI:Destroy() ProjectState.alive = false; if not ProjectState.rendering then finalDestroy() end; return self end
+function UI:Destroy()
+    print("UI:Destroy called!")
+    ProjectState.alive = false
+    if not ProjectState.rendering then 
+        finalDestroy()
+    end
+    return self
+end
 
 local function runStepSafe()
     if not ProjectState.alive then
