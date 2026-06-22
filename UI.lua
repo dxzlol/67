@@ -996,11 +996,9 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                         elseif item.type == "button" then
                             local controlY = rowY + 2
                             local hovered = over(rowX, controlY, rowW, CONTROL_H)
-
                             rect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.surface2, 42, 6, trans)
                             strokeRect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.border, 43, 6, trans)
                             txt(item.label, rowX + rowW / 2, centerY(controlY, CONTROL_H), Theme.text, 14, FontSystem, 44, true, false, rowW - 16, trans)
-
                             if not popupBlocking and not disabled and hovered and (click or ProjectState.rawClick) then
                                 safeCallback(item.callback)
                                 if click then click = false end
