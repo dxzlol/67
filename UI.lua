@@ -994,6 +994,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                             drawChevronDown(dx + dw - 15, centerY(controlY, CONTROL_H) - 2, Theme.sub, 45)
                             if click and hovered and not popupBlocking and not disabled then spawnDropdown("item", dx, rowY + 28, dw, item.choices, item.value, item.multi, item.callback, item, nil); click = false end
                         elseif item.type == "button" then
+                            if hovered then print("Button hovered") end
                             local controlY = rowY + 2; local hovered = over(rowX, controlY, rowW, CONTROL_H)
                             rect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.surface2, 42, 6, trans)
                             strokeRect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.border, 43, 6, trans)
