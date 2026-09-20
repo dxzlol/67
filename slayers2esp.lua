@@ -1,15 +1,15 @@
 --==============================================================
 --   Made by d.x.z.
---   Sea Crystal + Lost Page + Spider Lily + Horse ESP
---   Version 4.0
---   - Full rewrite of the lily pipeline: single scan, cached
---     analysis (flavour + anchor) refreshed every 1s
---   - Added Horse ESP (no range limit)
---   - Drastically reduced pcall closure churn
+--   Sea Crystal + Lost Page + Spider Lily + Horse + Coin ESP
+--   Version 4.4  (FINAL -TBD)
+--   - Coin drawings are now fully removed when their coin
+--     disappears, instead of just being hidden
+--   - Coin slots below the current highest index are cleaned
+--     up automatically
 --==============================================================
 
 local CONFIG = {
-    Version         = "4.0",
+    Version         = "4.4",
     PlaceId         = 136406881576517,
     CrystalRange    = 500,
     Slots           = { 1, 2, 3, 4, 5 },
@@ -17,22 +17,30 @@ local CONFIG = {
 
     FastRefresh     = 0.15,
     SlowRefresh     = 0.75,
-    LilyScanRefresh = 1.0,   -- seconds between full lily re-scans
+    LilyScanRefresh = 1.0,
+    CoinScanRefresh = 0.5,
+
+    CoinPrefix      = "Coin",
+
+    -- How many consecutive scans a coin must be missing before
+    -- we remove its drawings. 2 = ~1s at default CoinScanRefresh.
+    CoinMissingThreshold = 2,
 
     BoxSize = Vector2.new(20, 20),
     Offset  = { Name = Vector2.new(10, -16), Dist = Vector2.new(10, 22) },
     Font    = { Name = Drawing.Fonts.System or 0, Dist = Drawing.Fonts.UI or 0 },
 
     Palette = {
-        Crystal        = Color3.fromRGB(120, 200, 255),   -- light blue
-        Page           = Color3.fromRGB(181, 137, 84),    -- aged-paper brown
-        SpiderLilyRed  = Color3.fromRGB(255, 120, 200),   -- soft pink
-        SpiderLilyBlue = Color3.fromRGB(40, 70, 255),     -- deep vibrant blue
-        Horse          = Color3.fromRGB(255, 220, 100),   -- warm gold
+        Crystal        = Color3.fromRGB(120, 200, 255),
+        Page           = Color3.fromRGB(181, 137, 84),
+        SpiderLilyRed  = Color3.fromRGB(255, 120, 200),
+        SpiderLilyBlue = Color3.fromRGB(40, 70, 255),
+        Horse          = Color3.fromRGB(255, 220, 100),
+        Coin           = Color3.fromRGB(220, 140, 60),
     },
 
     Credit = "d.x.z.",
-    Title  = "Sea Crystal + Lost Page + Spider Lily + Horse ESP",
+    Title  = "Sea Crystal + Lost Page + Spider Lily + Horse + Coin ESP",
     Debug  = false,
 }
 
@@ -113,14 +121,14 @@ end
 ----------------------------------------------------------------
 local function tracker(spec)
     local self = {
-        spec        = spec,
-        slots       = spec.slots or CONFIG.Slots,
-        entries     = {},
-        draws       = {},
-        found       = -1,
-        seen        = {},
-        baseline    = {},
-        slotColors  = {},
+        spec       = spec,
+        slots      = spec.slots or CONFIG.Slots,
+        entries    = {},
+        draws      = {},
+        found      = -1,
+        seen       = {},
+        baseline   = {},
+        slotColors = {},
     }
 
     for _, i in ipairs(self.slots) do
@@ -148,7 +156,7 @@ local function tracker(spec)
 end
 
 ----------------------------------------------------------------
--- Simple finders (Sea Crystal, Lost Page, Horse)
+-- Finders
 ----------------------------------------------------------------
 local finder = {}
 
@@ -176,7 +184,6 @@ function finder.lostPage(n)
     return nil
 end
 
--- Path: Workspace.Debree.Regions.Misc.ActiveNpcs.Horse.Horse.Head
 function finder.horse(_)
     local debree = WKS:FindFirstChild("Debree")
     if not debree then return nil end
@@ -193,7 +200,6 @@ function finder.horse(_)
     local head = horse:FindFirstChild("Head")
     if head and head:IsA("BasePart") then return head end
 
-    -- Fallback: PrimaryPart, then first BasePart
     if horse.PrimaryPart then return horse.PrimaryPart end
     for _, d in ipairs(horse:GetDescendants()) do
         if d:IsA("BasePart") then return d end
@@ -233,7 +239,6 @@ local function classifyColor(col)
     return "other"
 end
 
--- Analyse a lily in ONE pass. Returns (flavour, anchorPart)
 local function analyseLily(lily)
     if not lily then return nil, nil end
 
@@ -274,29 +279,8 @@ local function analyseLily(lily)
     return "red", redBest
 end
 
-local function fallbackLilyPart(lily)
-    if not lily then return nil end
-    local root = lily:FindFirstChild("RootPart")
-    if root and root:IsA("BasePart") then return root end
-    if lily.PrimaryPart then return lily.PrimaryPart end
-
-    local best, bestSize = nil, -1
-    local ok, descs = pcall(function() return lily:GetDescendants() end)
-    if not ok or not descs then return nil end
-    for _, d in ipairs(descs) do
-        local isPart = false
-        pcall(function() isPart = d:IsA("BasePart") end)
-        if isPart and not nameLooksLikeStem(getName(d)) then
-            local sz = getSizeMagnitude(d)
-            if sz > bestSize then best, bestSize = d, sz end
-        end
-    end
-    return best
-end
-
 ----------------------------------------------------------------
--- Lily scan cache — returns list of { flavour, anchor, addr }
--- Refreshed every LilyScanRefresh seconds.
+-- Lily scan cache
 ----------------------------------------------------------------
 local _lilyResults = {}
 local _lilyNext    = 0
@@ -320,7 +304,6 @@ local function scanLilies()
         if string.find(low, "spider", 1, true)
             and string.find(low, "lily", 1, true) then
 
-            -- Require a descendant named "RootPart" (real lilies have it)
             local hasRoot = false
             local ok, descs = pcall(function() return c:GetDescendants() end)
             if ok and descs then
@@ -365,6 +348,266 @@ local function scanLilies()
 end
 
 ----------------------------------------------------------------
+-- DYNAMIC COIN MANAGER
+--   Auto-creates slots for Coin<N>. Removes drawings when a
+--   coin disappears (collected) so nothing lingers.
+----------------------------------------------------------------
+local CoinManager = {
+    entries     = {},   -- [index] = {part,pos,dist,text}
+    draws       = {},   -- [index] = {box,name,dist}
+    seen        = {},   -- [index] = last present bool
+    baseline    = {},   -- [index] = was-absent-at-first-tick
+    missCount   = {},   -- [index] = consecutive missing scans
+    lastTotal   = -1,
+}
+
+local function ensureCoinDrawings(index)
+    if CoinManager.draws[index] then return end
+    CoinManager.draws[index] = {
+        box  = draw("Square", {
+            Color = CONFIG.Palette.Coin, Size = CONFIG.BoxSize, Visible = false
+        }),
+        name = draw("Text", {
+            Color = CONFIG.Palette.Coin,
+            Text  = CONFIG.CoinPrefix .. index,
+            Font  = CONFIG.Font.Name, Size = 14,
+            Center = true, Outline = true, Visible = false,
+        }),
+        dist = draw("Text", {
+            Color = CONFIG.Palette.Coin, Text = "",
+            Font  = CONFIG.Font.Dist, Size = 13,
+            Center = true, Outline = true, Visible = false,
+        }),
+    }
+end
+
+-- Fully remove a coin slot's drawings & tracking state.
+local function destroyCoinSlot(index)
+    local d = CoinManager.draws[index]
+    if d then
+        pcall(function() d.box:Remove()  end)
+        pcall(function() d.name:Remove() end)
+        pcall(function() d.dist:Remove() end)
+        CoinManager.draws[index] = nil
+    end
+    CoinManager.entries[index]   = nil
+    CoinManager.seen[index]      = nil
+    CoinManager.baseline[index]  = nil
+    CoinManager.missCount[index] = nil
+
+    if CONFIG.Debug then
+        print(("[Coin] slot %d cleared"):format(index))
+    end
+end
+
+local function scanCoins()
+    local map = {}
+    local highest = 0
+
+    local ok, children = pcall(function() return WKS:GetChildren() end)
+    if not ok or not children then return map, highest end
+
+    for _, c in ipairs(children) do
+        local n = getName(c)
+        local numStr = string.match(n, "^" .. CONFIG.CoinPrefix .. "(%d+)$")
+        if numStr then
+            local num = tonumber(numStr)
+            if num then
+                local part = nil
+                if c:IsA("BasePart") then
+                    part = c
+                elseif c.PrimaryPart then
+                    part = c.PrimaryPart
+                else
+                    for _, d in ipairs(c:GetDescendants()) do
+                        if d:IsA("BasePart") then
+                            part = d
+                            break
+                        end
+                    end
+                end
+                if part then
+                    map[num] = part
+                    if num > highest then highest = num end
+                end
+            end
+        end
+    end
+
+    return map, highest
+end
+
+local _coinNext    = 0
+local _coinCache   = {}
+local _coinHighest = 0
+
+local function getCoins()
+    local now = tick()
+    if now < _coinNext then return _coinCache, _coinHighest end
+    _coinNext = now + CONFIG.CoinScanRefresh
+
+    local map, highest = scanCoins()
+    _coinCache   = map
+    _coinHighest = highest
+    return map, highest
+end
+
+local function refreshCoins(hrp)
+    local found, highest = getCoins()
+    local hrpPos = hrp and getPosition(hrp) or nil
+
+    -- Determine which indices are currently alive
+    local alive = {}
+    local actualHighest = 0
+    for i, part in pairs(found) do
+        if part and part.Parent then
+            alive[i] = true
+            if i > actualHighest then actualHighest = i end
+        end
+    end
+
+    -- Grow drawings for any new index
+    for i = 1, actualHighest do
+        if alive[i] then
+            ensureCoinDrawings(i)
+        end
+    end
+
+    -- Refresh each alive slot
+    for i = 1, actualHighest do
+        if alive[i] then
+            local e = CoinManager.entries[i]
+            if not e then
+                e = { part = nil, pos = nil, dist = math.huge, text = "" }
+                CoinManager.entries[i] = e
+            end
+
+            local part = found[i]
+            e.part = part
+
+            local pos = getPosition(part)
+            if pos then e.pos = pos end
+
+            if hrpPos and e.pos then
+                local dist
+                pcall(function() dist = (hrpPos - e.pos).Magnitude end)
+                if dist then
+                    e.dist = dist
+                    e.text = ("%.1f studs"):format(dist)
+                else
+                    e.dist, e.text = math.huge, ""
+                end
+            else
+                e.dist, e.text = math.huge, ""
+            end
+        end
+    end
+
+    -- Update miss counters and clean up dead slots
+    -- Walk a snapshot of the current indices, not the live table,
+    -- because destroyCoinSlot mutates the table.
+    local indices = {}
+    for i, _ in pairs(CoinManager.draws) do
+        indices[#indices + 1] = i
+    end
+
+    for _, i in ipairs(indices) do
+        if alive[i] then
+            CoinManager.missCount[i] = 0
+        else
+            local mc = (CoinManager.missCount[i] or 0) + 1
+            CoinManager.missCount[i] = mc
+            if mc >= CONFIG.CoinMissingThreshold then
+                destroyCoinSlot(i)
+            end
+        end
+    end
+end
+
+local function reportCoins(force)
+    local found = _coinCache
+    local highest = _coinHighest
+
+    -- Determine live set (using actual parent check)
+    local alive = {}
+    local total = 0
+    for i = 1, highest do
+        local part = found[i]
+        if part and part.Parent then
+            alive[i] = true
+            total = total + 1
+        end
+    end
+
+    -- Live pickups: seen[i] was true, now gone
+    local live = {}
+    for i = 1, highest do
+        local present = alive[i] and true or false
+        local seen = CoinManager.seen[i]
+
+        if seen == nil then
+            CoinManager.seen[i]     = present
+            CoinManager.baseline[i] = not present
+        elseif seen and not present then
+            live[#live + 1] = i
+            CoinManager.seen[i] = false
+        elseif not seen and present then
+            CoinManager.seen[i] = true
+        end
+    end
+
+    if not force and #live > 0 then
+        for _, i in ipairs(live) do
+            print(("[Quest] %s%d COLLECTED JUST NOW  (%d present)"):format(
+                CONFIG.CoinPrefix, i, total
+            ))
+        end
+    end
+
+    local changed = force or total ~= CoinManager.lastTotal or #live > 0
+    if not changed then return end
+    CoinManager.lastTotal = total
+
+    if total > 0 then
+        local names = {}
+        for i = 1, highest do
+            if alive[i] then names[#names + 1] = CONFIG.CoinPrefix .. i end
+        end
+        print(("[Quest] Coins present: %d  [%s]"):format(
+            total, table.concat(names, ", ")
+        ))
+    else
+        print("[Quest] Coins present: 0")
+    end
+end
+
+local function renderCoins(hrp)
+    local hrpPos = hrp and getPosition(hrp) or nil
+
+    for i, e in pairs(CoinManager.entries) do
+        local d = CoinManager.draws[i]
+        if d then
+            local show = e.part and e.part.Parent and e.pos and hrpPos
+            if show then
+                local sp, onScreen = W2S(e.pos)
+                if onScreen then
+                    local boxPos = sp - CONFIG.BoxSize
+                    d.box.Position  = boxPos
+                    d.name.Position = boxPos + CONFIG.Offset.Name
+                    d.dist.Position = boxPos + CONFIG.Offset.Dist
+                    d.dist.Text     = e.text
+                    d.box.Visible, d.name.Visible, d.dist.Visible = true, true, true
+                elseif d.box.Visible then
+                    d.box.Visible, d.name.Visible, d.dist.Visible = false, false, false
+                end
+            elseif d.box.Visible then
+                d.box.Visible, d.name.Visible, d.dist.Visible = false, false, false
+            end
+        end
+    end
+end
+
+----------------------------------------------------------------
 -- Trackers
 ----------------------------------------------------------------
 local Trackers = {
@@ -380,7 +623,7 @@ local Trackers = {
     }),
     SpiderLily = tracker({
         label = "Spider Lily", color = CONFIG.Palette.SpiderLilyRed,
-        range = nil, finder = function() return nil end,  -- driven by scan
+        range = nil, finder = function() return nil end,
         slots = CONFIG.SpiderLilySlots, numbered = false,
     }),
     Horse = tracker({
@@ -391,7 +634,7 @@ local Trackers = {
 }
 
 ----------------------------------------------------------------
--- Colour application for lily slots
+-- Lily slot colour
 ----------------------------------------------------------------
 local function applyLilySlotColor(slot, flavour)
     local t = Trackers.SpiderLily
@@ -417,7 +660,7 @@ local function applyLilySlotColor(slot, flavour)
 end
 
 ----------------------------------------------------------------
--- Character / cache helpers
+-- HRP + fixed-slot refresh
 ----------------------------------------------------------------
 local function getHrp()
     local c = ME.Character
@@ -526,8 +769,10 @@ end
 local function reportQuests(force)
     local cLive, _ = detect(Trackers.Crystal)
     local pLive, _ = detect(Trackers.Page)
+
     local c = countFound(Trackers.Crystal)
     local p = countFound(Trackers.Page)
+
     local prevC = Trackers.Crystal.found
     local prevP = Trackers.Page.found
 
@@ -549,6 +794,15 @@ local function reportQuests(force)
 
     print(("[Quest] Sea Crystals: %d/5 present, %d/5 gone"):format(c, 5 - c))
     print(("[Quest] Lost Pages:   %d/5 present, %d/5 gone"):format(p, 5 - p))
+
+    if not force then
+        if prevC > 0 and c == 0 then
+            pcall(function() notify("Sea Crystal quest COMPLETE!", "Quest", 5) end)
+        end
+        if prevP > 0 and p == 0 then
+            pcall(function() notify("Lost Page quest COMPLETE!", "Quest", 5) end)
+        end
+    end
 end
 
 local function reportHorse(force)
@@ -569,14 +823,13 @@ local function reportHorse(force)
 end
 
 ----------------------------------------------------------------
--- Fast loop: Spider Lilies (cached scan) + Horse
+-- Fast loop: Spider Lilies + Horse
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
         pcall(function()
             local hrp = getHrp()
 
-            -- Lily slots driven by scan cache
             local models = scanLilies()
             local t = Trackers.SpiderLily
             for i = 1, #t.slots do
@@ -601,7 +854,7 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- Slow loop: Sea Crystals + Lost Pages
+-- Slow loop: Sea Crystals + Lost Pages + Coins
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -609,6 +862,9 @@ task.spawn(function()
             local hrp = getHrp()
             refreshTracker(Trackers.Crystal, hrp)
             refreshTracker(Trackers.Page, hrp)
+
+            refreshCoins(hrp)
+            reportCoins(false)
             reportQuests(false)
         end)
         task.wait(CONFIG.SlowRefresh)
@@ -638,9 +894,12 @@ task.spawn(function()
         refreshTracker(t, hrp)
         refreshTracker(Trackers.Horse, hrp)
 
+        refreshCoins(hrp)
+
         reportSpiderLily(true)
         reportQuests(true)
         reportHorse(true)
+        reportCoins(true)
     end)
 end)
 
@@ -683,4 +942,5 @@ RUN.RenderStepped:Connect(function()
     pcall(function() render(Trackers.Page, hrp) end)
     pcall(function() render(Trackers.SpiderLily, hrp) end)
     pcall(function() render(Trackers.Horse, hrp) end)
+    pcall(function() renderCoins(hrp) end)
 end)
