@@ -1,6 +1,6 @@
 --==============================================================
 --   Made by d.x.z.
---   Sea Crystal + Lost Page ESP
+--   Sea Crystal + Lost Page + Spider Lily ESP
 --==============================================================
 
 local CONFIG = {
@@ -12,11 +12,12 @@ local CONFIG = {
     Offset       = { Name = Vector2.new(10, -16), Dist = Vector2.new(10, 22) },
     Font         = { Name = Drawing.Fonts.System or 0, Dist = Drawing.Fonts.UI or 0 },
     Palette      = {
-        Crystal = Color3.fromRGB(120, 200, 255),   -- light blue
-        Page    = Color3.fromRGB(181, 137, 84),    -- aged-paper brown
+        Crystal    = Color3.fromRGB(120, 200, 255),   -- light blue
+        Page       = Color3.fromRGB(181, 137, 84),    -- aged-paper brown
+        SpiderLily = Color3.fromRGB(255, 120, 200),   -- soft pink
     },
     Credit = "d.x.z.",
-    Title  = "Sea Crystal + Lost Page ESP",
+    Title  = "Sea Crystal + Lost Page + Spider Lily ESP",
 }
 
 if game.PlaceId ~= CONFIG.PlaceId then return end
@@ -52,27 +53,30 @@ end
 
 ----------------------------------------------------------------
 -- Tracker factory
---   baselineDone[i]  = true if slot was missing the very first tick
---   seen[i]          = last observed presence (true/false)
 ----------------------------------------------------------------
 local function tracker(spec)
     local self = {
-        spec         = spec,
-        entries      = {},
-        draws        = {},
-        found        = -1,
-        seen         = {},
-        baselineDone = {},    -- snapshot of "already gone at startup"
-        baselineSet  = false,
+        spec    = spec,
+        slots   = spec.slots or CONFIG.Slots,
+        entries = {},
+        draws   = {},
+        found   = -1,
+        seen    = {},
+        baselineDone = {},
     }
 
-    for _, i in ipairs(CONFIG.Slots) do
+    for _, i in ipairs(self.slots) do
+        local labelText = spec.label
+        if spec.numbered then
+            labelText = spec.label .. i
+        end
+
         self.entries[i] = { part = nil, pos = nil, dist = math.huge, text = "" }
         self.seen[i] = nil
         self.draws[i] = {
             box  = draw("Square", { Color = spec.color, Size = CONFIG.BoxSize, Visible = false }),
             name = draw("Text", {
-                Color = spec.color, Text = spec.label .. i,
+                Color = spec.color, Text = labelText,
                 Font = CONFIG.Font.Name, Size = 14,
                 Center = true, Outline = true, Visible = false,
             }),
@@ -118,21 +122,52 @@ function finder.lostPage(n)
     end
 end
 
+-- Path: Workspace.Debree."Spider Lily".RootPart
+function finder.spiderLily(_)
+    local debree = WKS:FindFirstChild("Debree")
+    if not debree then return end
+
+    local lily = debree:FindFirstChild("Spider Lily")
+    if not lily then return end
+
+    local root = lily:FindFirstChild("RootPart")
+    if root and root:IsA("BasePart") then
+        return root
+    end
+
+    if lily.PrimaryPart then return lily.PrimaryPart end
+    for _, d in ipairs(lily:GetDescendants()) do
+        if d:IsA("BasePart") then return d end
+    end
+end
+
 ----------------------------------------------------------------
--- Instantiate the two trackers
+-- Instantiate trackers
 ----------------------------------------------------------------
 local Trackers = {
     Crystal = tracker({
-        label  = "Sea Crystal",
-        color  = CONFIG.Palette.Crystal,
-        range  = CONFIG.CrystalRange,
-        finder = finder.seaCrystal,
+        label    = "Sea Crystal",
+        color    = CONFIG.Palette.Crystal,
+        range    = CONFIG.CrystalRange,
+        finder   = finder.seaCrystal,
+        slots    = CONFIG.Slots,
+        numbered = true,
     }),
     Page = tracker({
-        label  = "Lost Page",
-        color  = CONFIG.Palette.Page,
-        range  = nil,
-        finder = finder.lostPage,
+        label    = "Lost Page",
+        color    = CONFIG.Palette.Page,
+        range    = nil,
+        finder   = finder.lostPage,
+        slots    = CONFIG.Slots,
+        numbered = true,
+    }),
+    SpiderLily = tracker({
+        label    = "Spider Lily",
+        color    = CONFIG.Palette.SpiderLily,
+        range    = nil,
+        finder   = finder.spiderLily,
+        slots    = { 1 },
+        numbered = false,
     }),
 }
 
@@ -145,7 +180,7 @@ local function getHrp()
 end
 
 local function refresh(t, hrp)
-    for _, i in ipairs(CONFIG.Slots) do
+    for _, i in ipairs(t.slots) do
         local e = t.entries[i]
 
         if not (e.part and e.part.Parent) then
@@ -170,7 +205,7 @@ end
 
 local function countFound(t)
     local n = 0
-    for _, i in ipairs(CONFIG.Slots) do
+    for _, i in ipairs(t.slots) do
         local e = t.entries[i]
         if e.part and e.part.Parent then n = n + 1 end
     end
@@ -179,31 +214,21 @@ end
 
 ----------------------------------------------------------------
 -- Detection pass
---   returns: live[]    -> collected during this session (just now)
---            missing[] -> confirmed absent at this tick
---            respawned[] -> came back after being absent
 ----------------------------------------------------------------
 local function detect(t)
     local live, missing, respawned = {}, {}, {}
 
-    for _, i in ipairs(CONFIG.Slots) do
+    for _, i in ipairs(t.slots) do
         local e = t.entries[i]
         local present = (e.part and e.part.Parent) and true or false
 
         if t.seen[i] == nil then
-            -- First-ever observation: no "live collect", just set baseline
             t.seen[i] = present
-            if not present then
-                t.baselineDone[i] = true
-            else
-                t.baselineDone[i] = false
-            end
+            t.baselineDone[i] = not present
         elseif t.seen[i] and not present then
-            -- Was here, now gone -> player just picked it up
             live[#live + 1] = i
             t.seen[i] = false
         elseif not t.seen[i] and present then
-            -- Came back -> respawn
             respawned[#respawned + 1] = i
             t.seen[i] = true
         end
@@ -217,22 +242,27 @@ local function detect(t)
 end
 
 ----------------------------------------------------------------
--- Quest progress reporter
+-- Progress reporter
 ----------------------------------------------------------------
 local function report(force)
     local cLive, cMissing, cRespawn = detect(Trackers.Crystal)
     local pLive, pMissing, pRespawn = detect(Trackers.Page)
+    local sLive, sMissing, sRespawn = detect(Trackers.SpiderLily)
 
     local c = countFound(Trackers.Crystal)
     local p = countFound(Trackers.Page)
+    local s = countFound(Trackers.SpiderLily)
 
-    -- Announce live collections (player is doing it NOW)
+    -- Announce live collections
     if not force then
         for _, i in ipairs(cLive) do
             print(("[Quest] Sea Crystal%d COLLECTED JUST NOW  (%d/5 left)"):format(i, c))
         end
         for _, i in ipairs(pLive) do
             print(("[Quest] Lost Page%d COLLECTED JUST NOW  (%d/5 left)"):format(i, p))
+        end
+        if #sLive > 0 then
+            print("[Quest] Spider Lily COLLECTED JUST NOW")
         end
 
         for _, i in ipairs(cRespawn) do
@@ -241,26 +271,35 @@ local function report(force)
         for _, i in ipairs(pRespawn) do
             print(("[Quest] Lost Page%d respawned"):format(i))
         end
+        if #sRespawn > 0 then
+            print("[Quest] Spider Lily spawned")
+        end
     end
 
-    -- Only re-print the summary when something actually changed
     local changed = force
         or c ~= Trackers.Crystal.found
         or p ~= Trackers.Page.found
-        or #cLive > 0 or #pLive > 0
+        or s ~= Trackers.SpiderLily.found
+        or #cLive > 0 or #pLive > 0 or #sLive > 0
 
     if not changed then return end
 
-    Trackers.Crystal.found = c
-    Trackers.Page.found    = p
+    Trackers.Crystal.found    = c
+    Trackers.Page.found       = p
+    Trackers.SpiderLily.found = s
 
     print(("[Quest] Sea Crystals: %d/5 present, %d/5 gone"):format(c, 5 - c))
     print(("[Quest] Lost Pages:   %d/5 present, %d/5 gone"):format(p, 5 - p))
 
-    -- Break the "gone" count into "already gone before start" vs "done now"
-    local function explain(t, live, label)
+    -- Spider Lily: only report when it is present. Never "gone" / "collected".
+    if s == 1 then
+        print("[Quest] Spider Lily: present in the world")
+    end
+
+    -- Break down Sea Crystal / Lost Page completion state
+    local function explain(t, label, total)
         local already, justNow = {}, {}
-        for _, i in ipairs(CONFIG.Slots) do
+        for _, i in ipairs(t.slots) do
             local e = t.entries[i]
             local present = (e.part and e.part.Parent) and true or false
             if not present then
@@ -283,21 +322,20 @@ local function report(force)
             ))
         end
 
-        -- Final completion status per-quest
         local totalGone = #already + #justNow
-        if totalGone == 5 then
+        if totalGone == total then
             if #justNow == 0 then
-                print(("[Quest] %s quest was ALREADY COMPLETE on load"):format(label))
+                print(("[Quest] %s was ALREADY COMPLETE on load"):format(label))
             else
-                print(("[Quest] %s quest COMPLETED during this session"):format(label))
+                print(("[Quest] %s COMPLETED during this session"):format(label))
             end
         end
     end
 
-    explain(Trackers.Crystal, cLive, "Sea Crystals")
-    explain(Trackers.Page,    pLive, "Lost Pages")
+    explain(Trackers.Crystal, "Sea Crystals", 5)
+    explain(Trackers.Page,    "Lost Pages",   5)
 
-    -- Live-just-completed notifications (only when the last one is picked up live)
+    -- Live-just-completed notifications
     if not force then
         if Trackers.Crystal.found > 0 and c == 0 then
             pcall(function() notify("Sea Crystal quest COMPLETE!", "Quest", 5) end)
@@ -316,6 +354,7 @@ task.spawn(function()
         local hrp = getHrp()
         refresh(Trackers.Crystal, hrp)
         refresh(Trackers.Page, hrp)
+        refresh(Trackers.SpiderLily, hrp)
         report(false)
         task.wait(CONFIG.Refresh)
     end
@@ -324,8 +363,10 @@ end)
 -- First pass (baseline snapshot)
 task.spawn(function()
     task.wait(1)
-    refresh(Trackers.Crystal, getHrp())
-    refresh(Trackers.Page, getHrp())
+    local hrp = getHrp()
+    refresh(Trackers.Crystal, hrp)
+    refresh(Trackers.Page, hrp)
+    refresh(Trackers.SpiderLily, hrp)
     report(true)
 end)
 
@@ -333,7 +374,7 @@ end)
 -- Generic renderer
 ----------------------------------------------------------------
 local function render(t, hrp)
-    for _, i in ipairs(CONFIG.Slots) do
+    for _, i in ipairs(t.slots) do
         local e = t.entries[i]
         local d = t.draws[i]
 
@@ -364,4 +405,5 @@ RUN.RenderStepped:Connect(function()
     local hrp = getHrp()
     render(Trackers.Crystal, hrp)
     render(Trackers.Page, hrp)
+    render(Trackers.SpiderLily, hrp)
 end)
